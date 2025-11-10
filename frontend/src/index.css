@@ -7,6 +7,17 @@ code, .wallet-address {
 }
 
 .glow {
-  text-shadow: 0 0 8px rgba(0, 255, 255, 0.6),
-               0 0 20px rgba(0, 255, 255, 0.3);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.6),
+               0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+
+select option {
+  background-color: #0d0d0d;  /* black background */
+  color: #ffffff;             /* white text */
+}
+
+select option:hover {
+  background-color: #06b6d4;  /* cyan on hover */
+  color: #000000;             /* black text when hovered */
 }
