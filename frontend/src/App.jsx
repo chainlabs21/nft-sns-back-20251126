@@ -15,6 +15,10 @@ import DistributionDashboard from "./distributiondashboard.jsx";
 import DistributionPage from "./distributioncomplete.jsx";
 import ShareModal from "./sharemodal.jsx";
 import NFTDisplay from "./detailsnft.jsx";
+import ContestLeaderboard from "./leaderboard.jsx";
+import Events from "./events.jsx";
+import ContestDetails from "./eventdetailpg.jsx";
+import NFTSubmitModal from "./participate.jsx";
 
 function App() {
   return (
@@ -34,7 +38,10 @@ function App() {
         <Route path="/districomplete" element={<DistributionPage/>} />
         <Route path="/sharemodal" element={<ShareModal/>} />
         <Route path="/detail" element={<NFTDisplay/>} />
-
+        <Route path="/leaderboard" element={<ContestLeaderboard/>} />
+        <Route path = "/events" element={<Events/>} />
+        <Route path = "/eventdetailpg" element={<ContestDetails/>} />
+        <Route path = "/participate"  element={<NFTSubmitModal/>}/>
       </Routes>
     </Router>
   );

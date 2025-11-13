@@ -7,7 +7,7 @@ export default function IndexPage() {
       <h1 className="text-3xl font-bold mb-8">페이지 리스트</h1>
 
       {/* Two-column layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 text-center">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-20 text-center">
         {/* Left column */}
         <div className="flex flex-col gap-3">
           <Link to="/login" className="text-blue-500 hover:underline">Login Page</Link>
@@ -31,6 +31,14 @@ export default function IndexPage() {
           <Link to="/detail" className="text-blue-500 hover:underline col-span-2 mt-4">NFT details Page</Link>
           <Link to="/distribution1" className="text-blue-500 hover:underline col-span-2 mt-4">Distribution Part1</Link>
           <Link to="/distribution2" className="text-blue-500 hover:underline col-span-2 mt-4">Distribution Part2</Link>
+        </div>
+
+        <div className='flex flex-col'>
+          <Link to="/events" className="text-blue-500 hover:underline ">Events Page</Link>
+          <Link to="/eventdetailpg" className="text-blue-500 hover:underline mt-4">Event Detail Page</Link>
+          <Link to="/participate" className="text-blue-500 hover:underline mt-4">Participate Page</Link>
+          <Link to="/leaderboard" className="text-blue-500 hover:underline mt-4">Leaderboard Page</Link>
+
         </div>
 
       </div>
