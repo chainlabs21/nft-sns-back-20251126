@@ -1,11 +1,75 @@
-import React from "react";
+import React, { useState } from "react";
 import { Wallet, ArrowRight, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function RegisterPage() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    role: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Handle input changes
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // Handle Registration
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.full_name || !form.email || !form.password || !form.confirmPassword || !form.role) {
+      setError("All fields are required");
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("http://localhost:5000/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: form.full_name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        // Store the newly-created user ID so wallet can attach to this user
+        localStorage.setItem("temp_user_id", data.user_id);
+
+        navigate("/wallets");
+      } else {
+        setError(data.message || "Registration failed");
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong. Try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-black text-white min-h-screen flex items-center justify-center px-4 sm:px-6 md:px-8 relative">
-      {/* 🔙 Back Arrow */}
+
+      {/* BACK BUTTON */}
       <Link
         to="/"
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors"
@@ -15,94 +79,91 @@ export default function RegisterPage() {
       </Link>
 
       <div className="w-full max-w-md py-8 sm:py-10">
-        {/* Logo */}
-        <div className="mb-4 sm:mb-6 flex justify-center">
-          <img
-            src="logo (2).png"
-            alt="Logo"
-            className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 object-contain"
-          />
+        <div className="mb-4 flex justify-center">
+          <img src="logo (2).png" alt="Logo" className="w-20 h-20 object-contain" />
         </div>
 
-        {/* Headings */}
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 text-center glow">
-          Join MINTIOLAB
-        </h1>
-        <p className="text-gray-400 mb-6 text-center text-xs sm:text-sm md:text-base">
+        <h1 className="text-3xl font-bold mb-1 text-center glow">Join MINTIOLAB</h1>
+        <p className="text-gray-400 mb-6 text-center text-sm">
           Join <span className="text-gray-400">MINTIOLAB</span> and get started
         </p>
 
-        {/* Register Form */}
-        <form className="w-full bg-black rounded-2xl p-4 sm:p-6 border border-[#18181B] shadow-[0_0_20px_rgba(36,203,245,0.3)]">
+        <form
+          onSubmit={handleSubmit}
+          className="w-full bg-black rounded-2xl p-6 border border-[#18181B] shadow-[0_0_20px_rgba(36,203,245,0.3)]"
+        >
+          {error && <div className="text-red-500 text-sm mb-4">{error}</div>}
+
           {/* Full Name */}
           <div className="mb-4">
-            <label className="block text-xs sm:text-sm text-white mb-1.5">
-              Full Name
-            </label>
+            <label className="block text-sm text-white mb-1.5">Full Name</label>
             <input
               type="text"
+              name="full_name"
+              value={form.full_name}
+              onChange={handleChange}
               placeholder="Enter your full name"
               className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] 
-                         text-white placeholder-gray-500 focus:outline-none 
-                         focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 
-                         text-xs sm:text-sm"
+              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+              focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
           {/* Email */}
           <div className="mb-4">
-            <label className="block text-xs sm:text-sm text-white mb-1.5">
-              Email
-            </label>
+            <label className="block text-sm text-white mb-1.5">Email</label>
             <input
               type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
               placeholder="Enter your email"
               className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] 
-                         text-white placeholder-gray-500 focus:outline-none 
-                         focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 
-                         text-xs sm:text-sm"
+              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+              focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
           {/* Password */}
           <div className="mb-4">
-            <label className="block text-xs sm:text-sm text-white mb-1.5">
-              Password
-            </label>
+            <label className="block text-sm text-white mb-1.5">Password</label>
             <input
               type="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
               placeholder="Enter your password"
-              className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] 
-                         text-white placeholder-gray-500 focus:outline-none 
-                         focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 
-                         text-xs sm:text-sm"
+              className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B]
+              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+              focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
           {/* Confirm Password */}
           <div className="mb-4">
-            <label className="block text-xs sm:text-sm text-white mb-1.5">
-              Confirm Password
-            </label>
+            <label className="block text-sm text-white mb-1.5">Confirm Password</label>
             <input
               type="password"
+              name="confirmPassword"
+              value={form.confirmPassword}
+              onChange={handleChange}
               placeholder="Re-enter your password"
-              className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] 
-                         text-white placeholder-gray-500 focus:outline-none 
-                         focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 
-                         text-xs sm:text-sm"
+              className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B]
+              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+              focus:ring-1 focus:ring-cyan-500"
             />
           </div>
 
-          {/* Role Dropdown */}
+          {/* Role */}
           <div className="mb-5">
-            <label className="block text-xs sm:text-sm text-white mb-1.5">
-              Role
-            </label>
+            <label className="block text-sm text-white mb-1.5">Role</label>
             <select
+              name="role"
+              value={form.role}
+              onChange={handleChange}
               className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] 
-                         text-white text-xs sm:text-sm focus:outline-none 
-                         focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              text-white focus:outline-none focus:border-cyan-500 focus:ring-1
+              focus:ring-cyan-500"
             >
               <option value="">Select your role</option>
               <option value="creator">Creator</option>
@@ -110,40 +171,35 @@ export default function RegisterPage() {
             </select>
           </div>
 
-          {/* Create Account Button */}
+          {/* Submit */}
           <button
             type="submit"
+            disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-2 rounded-md 
-                       font-semibold text-black text-sm sm:text-base 
-                       bg-gradient-to-r from-[#24CBF5] to-[#9952E0] 
-                       hover:opacity-90 transition-opacity"
+            font-semibold text-black bg-gradient-to-r from-[#24CBF5] to-[#9952E0] 
+            hover:opacity-90 transition-opacity"
           >
-            Create Account
+            {loading ? "Creating Account..." : "Create Account"}
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          {/* Divider */}
           <div className="flex items-center my-5">
             <div className="flex-grow h-px bg-gray-700"></div>
-            <span className="text-gray-400 text-xs sm:text-sm mx-2">OPTIONAL</span>
+            <span className="text-gray-400 text-sm mx-2">OPTIONAL</span>
             <div className="flex-grow h-px bg-gray-700"></div>
           </div>
 
-          {/* Connect Wallet Button */}
-          <button
-            type="button"
+          {/* CONNECT WALLET BUTTON */}
+          <Link
+            to="/wallets"
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md 
-                       border border-cyan-400 text-white hover:bg-cyan-400/10 
-                       transition-colors text-xs sm:text-sm"
+            border border-cyan-400 text-white hover:bg-cyan-400/10 transition-colors"
           >
             <Wallet className="w-4 h-4 text-cyan-400" />
-            <span>
-              <Link to="/wallets">Connect Wallet</Link>
-            </span>
-          </button>
+            Connect Wallet
+          </Link>
 
-          {/* Footer */}
-          <div className="text-center mt-5 text-xs sm:text-sm text-gray-400">
+          <div className="text-center mt-5 text-sm text-gray-400">
             Already have an account?{" "}
             <Link to="/login" className="text-cyan-400 hover:underline">
               Login
