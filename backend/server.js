@@ -2,9 +2,11 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
+const { Op } = require("sequelize");
 
 const sequelize = require("./sequelize");
 const User = require("./User");
+const UserWallet = require("./UserWalle")
 
 const app = express();
 app.use(cors());
@@ -21,7 +23,6 @@ function generateToken(user) {
     {
       id: user.id,
       email: user.email || null,
-      wallet_address: user.wallet_address || null,
       role: user.role || "User",
     },
     JWT_SECRET,
@@ -98,10 +99,15 @@ app.post("/api/auth/login", async (req, res) => {
 
     const token = generateToken(user);
 
+    // Check if user has any active wallet
+    const activeWallet = await UserWallet.findOne({
+      where: { user_id: user.id, is_active: true },
+    });
+
     res.json({
       message: "Login successful",
       user_id: user.id,
-      wallet_connected: !!user.wallet_address,
+      wallet_connected: !!activeWallet,
       token,
     });
   } catch (err) {
@@ -110,68 +116,95 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// -------------------------
-// WALLET REGISTER / LINK
-// -------------------------
-app.post("/api/auth/register-wallet", async (req, res) => {
-  try {
-    const { wallet_address, role, user_id } = req.body;
+/// -------------------------
+// CONNECT / ADD WALLET
 
-    if (!wallet_address)
+app.post("/api/wallet/add", authMiddleware, async (req, res) => {
+  try {
+    const { address } = req.body;
+    if (!address)
       return res.status(400).json({ message: "Wallet address is required" });
 
-    // CASE 1: User already signed up → just link wallet
-    if (user_id) {
-      const user = await User.findByPk(user_id);
-
-      if (!user)
-        return res.status(404).json({ message: "User not found" });
-
-      await user.update({
-        wallet_address,
-        role: role || user.role,
-      });
-
-      const updatedUser = user.toJSON();
-      updatedUser.wallet_address = wallet_address;
-      updatedUser.role = role || user.role;
-
-      const token = generateToken(updatedUser);
-
-      return res.json({
-        message: "Wallet linked successfully",
-        user_id,
-        token,
+    // 1. Check if wallet address is already used by ANY user
+    const addressTaken = await UserWallet.findOne({ where: { address } });
+    if (addressTaken) {
+      return res.status(400).json({
+        message: "This wallet is already linked to another user",
       });
     }
 
-    // CASE 2: Wallet login or auto create user
-    let user = await User.findOne({ where: { wallet_address } });
-
-    if (!user) {
-      user = await User.create({
-        wallet_address,
-        role: role || "User",
-      });
-
-      return res.json({
-        message: "Wallet registered successfully",
-        user_id: user.id,
-        token: generateToken(user),
-      });
-    }
-
-    return res.json({
-      message: "Wallet login successful",
-      user_id: user.id,
-      token: generateToken(user),
+    // 2. Check if same user has already linked this address
+    const exists = await UserWallet.findOne({
+      where: { user_id: req.user.id, address },
     });
+    if (exists)
+      return res.status(400).json({ message: "Wallet already linked" });
 
+    // 3. Create wallet
+    let wallet;
+    try {
+      wallet = await UserWallet.create({
+        user_id: req.user.id,
+        address,
+        is_active: true,
+      });
+    } catch (err) {
+      if (err.name === "SequelizeUniqueConstraintError") {
+        return res.status(400).json({
+          message: "This wallet is already linked to another user",
+        });
+      }
+      console.error(err);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+
+    // 4. Set all other wallets to inactive
+    await UserWallet.update(
+      { is_active: false },
+      { where: { user_id: req.user.id, id: { [Op.ne]: wallet.id } } }
+    );
+
+    res.json({ message: "Wallet linked successfully", wallet });
   } catch (err) {
-    console.error("Wallet register/login error:", err);
+    console.error("Add wallet error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+
+// -------------------------
+// DISCONNECT ACTIVE WALLET
+// -------------------------
+app.patch("/api/wallet/disconnect", authMiddleware, async (req, res) => {
+  try {
+    await UserWallet.update(
+      { is_active: false },
+      { where: { user_id: req.user.id, is_active: true } }
+    );
+
+    res.json({ message: "Wallet disconnected successfully" });
+  } catch (err) {
+    console.error("Disconnect wallet error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// // -------------------------
+// // LIST ALL WALLETS
+// // -------------------------
+// app.get("/api/wallet/list", authMiddleware, async (req, res) => {
+//   try {
+//     const wallets = await UserWallet.findAll({
+//       where: { user_id: req.user.id },
+//       attributes: ["id", "address", "is_active"],
+//     });
+
+//     res.json({ wallets });
+//   } catch (err) {
+//     console.error("List wallet error:", err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// });
 
 // -------------------------
 // GET USER PROFILE
@@ -179,21 +212,20 @@ app.post("/api/auth/register-wallet", async (req, res) => {
 app.get("/api/user/profile", authMiddleware, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: [
-        "id",
-        "full_name",
-        "bio",
-        "twitter",
-        "instagram",
-        "website",
-        "wallet_address",
+      attributes: ["id", "full_name", "bio", "twitter", "instagram", "website"],
+      include: [
+        {
+          model: UserWallet,
+          attributes: ["id", "address", "is_active"],
+        },
       ],
     });
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    res.json({ profile: user });
+
+    res.json({ profile: user.toJSON() });
   } catch (err) {
     console.error("Profile fetch error:", err);
     res.status(500).json({ message: "Internal server error" });

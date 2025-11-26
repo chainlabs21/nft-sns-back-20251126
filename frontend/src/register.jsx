@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { Wallet, ArrowRight, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import AnimatedAlert from "./Alertanimated";
 
 export default function RegisterPage() {
+  const [showAlert, setShowAlert] = useState(false);
   const navigate = useNavigate();
   const [form, setForm] = useState({
     full_name: "",
@@ -15,12 +17,10 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Handle input changes
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Handle Registration
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -50,10 +50,8 @@ export default function RegisterPage() {
 
       const data = await response.json();
       if (response.ok) {
-        // Store the newly-created user ID so wallet can attach to this user
         localStorage.setItem("temp_user_id", data.user_id);
-
-        navigate("/wallets");
+        navigate("/profile");
       } else {
         setError(data.message || "Registration failed");
       }
@@ -69,7 +67,6 @@ export default function RegisterPage() {
   return (
     <div className="bg-black text-white min-h-screen flex items-center justify-center px-4 sm:px-6 md:px-8 relative">
 
-      {/* BACK BUTTON */}
       <Link
         to="/"
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors"
@@ -190,14 +187,22 @@ export default function RegisterPage() {
           </div>
 
           {/* CONNECT WALLET BUTTON */}
-          <Link
-            to="/wallets"
+          <button
+            type="button"
+            onClick={() => setShowAlert(true)}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md 
-            border border-cyan-400 text-white hover:bg-cyan-400/10 transition-colors"
+      border border-cyan-400 text-white hover:bg-cyan-400/10 transition-colors"
           >
             <Wallet className="w-4 h-4 text-cyan-400" />
             Connect Wallet
-          </Link>
+          </button>
+
+          {showAlert && (
+            <AnimatedAlert
+              message="Please create an account first before connecting a wallet."
+              onClose={() => setShowAlert(false)}
+            />
+          )}
 
           <div className="text-center mt-5 text-sm text-gray-400">
             Already have an account?{" "}
@@ -205,6 +210,8 @@ export default function RegisterPage() {
               Login
             </Link>
           </div>
+
+
         </form>
       </div>
     </div>

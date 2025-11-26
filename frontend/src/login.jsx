@@ -1,9 +1,11 @@
 import React, { useState } from "react";
-import { Wallet, ArrowRight } from "lucide-react";
+import { Wallet, ArrowRight, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import AnimatedAlert from "./Alertanimated";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [alert, setAlert] = useState(null); // SAME ALERT SYSTEM
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -13,17 +15,19 @@ export default function LoginPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Handle email/password login
+  // Handle login
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setAlert(null);
 
     if (!form.email || !form.password) {
-      setError("Email and password are required");
+      setAlert({ type: "error", message: "Email and password are required" });
       return;
     }
 
     setLoading(true);
+
     try {
       const response = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
@@ -36,18 +40,19 @@ export default function LoginPage() {
       if (response.ok) {
         localStorage.setItem("token", data.token);
 
-        // Redirect depending on wallet status
-        if (data.wallet_connected) {
+        // Show success alert
+        setAlert({ type: "success", message: "Login successful!" });
+
+        // Redirect after short delay
+        setTimeout(() => {
           navigate("/profile");
-        } else {
-          navigate("/wallets");
-        }
+        }, 1200);
       } else {
-        setError(data.message || "Login failed");
+        setAlert({ type: "error", message: data.message || "Login failed" });
       }
     } catch (err) {
       console.error(err);
-      setError("Something went wrong. Try again later.");
+      setAlert({ type: "error", message: "Something went wrong. Try again later." });
     } finally {
       setLoading(false);
     }
@@ -55,6 +60,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 text-white relative">
+
+      {alert && (
+        <AnimatedAlert
+          type={alert.type}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
+      )}
 
       {/* Logo */}
       <div className="mb-6">
@@ -124,14 +137,18 @@ export default function LoginPage() {
           <div className="flex-grow h-px bg-gray-700"></div>
         </div>
 
-        {/* Connect Wallet Button */}
-        <Link
-          to="/wallets"
+        {/* Connect Wallet Button (blocked until login) */}
+        <button
+          type="button"
+          onClick={() => setAlert({
+            type: "info",
+            message: "Please login first before connecting a wallet."
+          })}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-md border border-cyan-400 text-white hover:bg-cyan-400/10 transition-colors"
         >
           <Wallet className="w-5 h-5 text-cyan-400" />
           Connect Wallet
-        </Link>
+        </button>
 
         {/* Footer */}
         <div className="text-center mt-6 text-sm text-gray-400">

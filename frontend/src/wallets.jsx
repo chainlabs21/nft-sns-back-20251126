@@ -12,7 +12,7 @@ import WalletConnectProvider from "@walletconnect/ethereum-provider";
 import CoinbaseWalletSDK from "@coinbase/wallet-sdk";
 
 export default function Wallets() {
-  const [isConnected, setIsConnected] = useState(false);9
+  const [isConnected, setIsConnected] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState(null);
   const [walletAddress, setWalletAddress] = useState("");
   const [balance, setBalance] = useState(null);
@@ -46,31 +46,28 @@ export default function Wallets() {
     }
   }, []);
 
+  // ----------------------------
   // REGISTER WALLET IN BACKEND
+  // ----------------------------
   const registerWalletBackend = async (address) => {
     try {
-      const tempUserId = localStorage.getItem("temp_user_id");
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("User not logged in");
 
-      const bodyData = {
-        wallet_address: address,
-        role: "User",
-      };
-
-      if (tempUserId) {
-        bodyData.user_id = tempUserId;
-      }
-
-      const res = await fetch("http://localhost:5000/api/auth/register-wallet", {
+      const res = await fetch("http://localhost:5000/api/wallet/add", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyData),
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ address }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
-      localStorage.setItem("token", data.token);
-      localStorage.removeItem("temp_user_id");
+      setAlert("connected");
+      setIsConnected(true);
     } catch (err) {
       console.error(err);
       setAlert("error: " + err.message);
@@ -88,7 +85,6 @@ export default function Wallets() {
     setNetwork("");
     setChainId(null);
     setAlert("disconnected");
-    localStorage.removeItem("token");
   };
 
   // ----------------------------
@@ -98,7 +94,6 @@ export default function Wallets() {
     try {
       if (!window.ethereum) throw new Error("Please install MetaMask.");
 
-      // Request fresh permission
       await window.ethereum.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
@@ -115,10 +110,6 @@ export default function Wallets() {
       await loadAccountData(address, provider);
       await registerWalletBackend(address);
 
-      setIsConnected(true);
-
-      //  Show alert AFTER successful connection
-      setAlert("connected");
     } catch (err) {
       console.error(err);
       setAlert("error: " + err.message);
@@ -148,10 +139,6 @@ export default function Wallets() {
       await loadAccountData(address, provider);
       await registerWalletBackend(address);
 
-      setIsConnected(true);
-
-      //  Alert only after success
-      setAlert("connected");
     } catch (err) {
       console.error(err);
       setAlert("error: " + err.message);
@@ -183,10 +170,6 @@ export default function Wallets() {
       await loadAccountData(address, ethersProvider);
       await registerWalletBackend(address);
 
-      setIsConnected(true);
-
-      // 🔥 Alert AFTER successful connection
-      setAlert("connected");
     } catch (err) {
       console.error(err);
       setAlert("error: " + err.message);
@@ -292,6 +275,7 @@ export default function Wallets() {
         ) : (
           <div className="flex flex-col sm:flex-row gap-4">
             <button
+              type="button"
               onClick={disconnectWallet}
               className="w-full sm:w-1/2 border border-[#18181B] hover:bg-red-500/10 py-2.5 rounded-md"
             >
