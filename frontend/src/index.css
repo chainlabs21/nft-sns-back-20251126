@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-code, .wallet-address {
-  font-family: 'JetBrains Mono', monospace;
+body, .inter-font {
+  font-family: 'Inter', sans-serif;
 }
+
 
 .glow {
   text-shadow: 0 0 4px rgba(255, 255, 255, 0.6),
@@ -26,5 +27,8 @@ code, .wallet-address {
 .animate-fade-slide {
   animation: fade-slide 0.3s ease-out;
 }
+
+
+
 
 

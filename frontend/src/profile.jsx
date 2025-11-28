@@ -1,3 +1,4 @@
+
 // ProfileSettings.jsx
 import React, { useEffect, useState } from "react";
 import { X, Save } from "lucide-react";
@@ -154,38 +155,38 @@ export default function ProfileSettings() {
   };
 
   const handleLogout = () => {
-  localStorage.clear();
-  navigate("/login");
-};
+    localStorage.clear();
+    navigate("/login");
+  };
 
 
   /// -------------------------
-// DISCONNECT WALLET
-// -------------------------
-const handleDisconnectWallet = async () => {
-  try {
-    const res = await fetch(`${API_BASE}/api/wallet/disconnect`, {
-      method: "PATCH",
-      headers: authHeaders(false),
-    });
+  // DISCONNECT WALLET
+  // -------------------------
+  const handleDisconnectWallet = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/wallet/disconnect`, {
+        method: "PATCH",
+        headers: authHeaders(false),
+      });
 
-    if (!res.ok) {
+      if (!res.ok) {
+        fireAlert("failedDisconnect");
+        return;
+      }
+
+      // Remove active wallet from state
+      setProfile((prev) => ({
+        ...prev,
+        UserWallets: prev.UserWallets.map(w => ({ ...w, is_active: false })), // mark all wallets inactive
+      }));
+
+      fireAlert("walletDisconnected");
+    } catch (err) {
+      console.error("Disconnect wallet error:", err);
       fireAlert("failedDisconnect");
-      return;
     }
-
-    // Remove active wallet from state
-    setProfile((prev) => ({
-      ...prev,
-      UserWallets: prev.UserWallets.map(w => ({ ...w, is_active: false })), // mark all wallets inactive
-    }));
-
-    fireAlert("walletDisconnected");
-  } catch (err) {
-    console.error("Disconnect wallet error:", err);
-    fireAlert("failedDisconnect");
-  }
-};
+  };
 
 
   if (loading) return <div className="text-white p-6">Loading profile...</div>;
@@ -250,11 +251,27 @@ const handleDisconnectWallet = async () => {
 
             {/* Stats */}
             <div className="bg-[#13131680] rounded-xl p-5 sm:p-6 space-y-3 shadow-md border border-[#18181B]">
-              <h3 className="text-sm font-semibold text-white uppercase">Stats</h3>
+              <div className="flex items-center gap-2">
+                <img src="right Btn (1).png" />
+                <h3 className="text-sm font-semibold text-white uppercase">Stats</h3>
+              </div>
               <div className="text-sm text-gray-300">
                 <div className="flex justify-between"><span>NFTs Created</span><span className="font-semibold">42</span></div>
-                <div className="flex justify-between mt-2"><span>Likes Received</span><span className="font-semibold">1284</span></div>
-                <div className="flex justify-between mt-2"><span>Ranking</span><span className="font-semibold">#156</span></div>
+                <div className="flex justify-between mt-2 items-center">
+                  <span>Likes Received</span>
+                  <span className="font-semibold flex items-center gap-2">
+                    <img src="Vector (7).png" alt="Likes" className="w-4 h-4" />
+                    1284
+                  </span>
+                </div>
+                <div className="flex justify-between mt-2 items-center">
+                  <span>Ranking</span>
+                  <span className="font-semibold flex items-center gap-2">
+                    <img src="Vector (8).png" alt="Ranking" className="w-4 h-4" />
+                    #156
+                  </span>
+                </div>
+
               </div>
             </div>
 
@@ -304,9 +321,14 @@ const handleDisconnectWallet = async () => {
 
             {/* Social Distribution */}
             <div className="bg-[#13131680] rounded-xl p-5 sm:p-6 space-y-3 shadow-md border border-[#18181B]">
-              <h3 className="text-sm font-semibold text-white">Social Distribution</h3>
+              <div className="flex gap-2 items-center">
+                <img src="share icon.png" />
+                <h3 className="text-sm font-semibold text-white">Social Distribution</h3>
+              </div>
               <p className="text-gray-400 text-sm">Manage your social media integrations and automated content distribution.</p>
-              <button className="mt-3 px-3 py-2 rounded-md border border-[#18181B] bg-[#09090B4D] text-white text-sm">Manage Connections</button>
+              <button className="mt-3 px-3 py-2 rounded-md border border-[#18181B] bg-[#09090B4D] text-white text-sm w-full">
+                Manage Connections
+              </button>
             </div>
           </div>
 
@@ -323,7 +345,7 @@ const handleDisconnectWallet = async () => {
                 value={profile.displayName}
                 onChange={handleChange}
                 disabled={!isEditing}
-                className={`w-full bg-[#09090B4D] border border-[#18181B] rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 focus:outline-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 focus:outline-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
               />
             </div>
 
@@ -336,7 +358,7 @@ const handleDisconnectWallet = async () => {
                 value={profile.bio}
                 onChange={handleChange}
                 disabled={!isEditing}
-                className={`w-full bg-[#09090B4D] border border-[#18181B] rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 resize-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 resize-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
               />
             </div>
 
@@ -344,44 +366,74 @@ const handleDisconnectWallet = async () => {
             <div>
               <h4 className="text-sm text-white uppercase mb-4 sm:mb-6">Social Links</h4>
               <div className="space-y-4">
-                <input
-                  type="url"
-                  name="twitter"
-                  value={profile.twitter}
-                  onChange={handleChange}
-                  placeholder="https://twitter.com/your"
-                  disabled={!isEditing}
-                  className={`w-full bg-[#09090B4D] border border-[#18181B] rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
-                />
-                <input
-                  type="url"
-                  name="instagram"
-                  value={profile.instagram}
-                  onChange={handleChange}
-                  placeholder="https://instagram.com/your"
-                  disabled={!isEditing}
-                  className={`w-full bg-[#09090B4D] border border-[#18181B] rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
-                />
-                <input
-                  type="url"
-                  name="website"
-                  value={profile.website}
-                  onChange={handleChange}
-                  placeholder="https://your-website.com"
-                  disabled={!isEditing}
-                  className={`w-full bg-[#09090B4D] border border-[#18181B] rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
-                />
+
+                {/* Twitter */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <img src="Vector (9).png" alt="Twitter" className="w-4 h-4 object-contain" />
+                    <span className="text-white text-sm font-semibold">Twitter</span>
+                  </div>
+                  <input
+                    type="url"
+                    name="twitter"
+                    value={profile.twitter}
+                    onChange={handleChange}
+                    placeholder="https://twitter.com/your"
+                    disabled={!isEditing}
+                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                  />
+                </div>
+
+                {/* Instagram */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <img src="Vector (10).png" alt="Instagram" className="w-4 h-4 object-contain" />
+                    <span className="text-white text-sm font-semibold">Instagram</span>
+                  </div>
+                  <input
+                    type="url"
+                    name="instagram"
+                    value={profile.instagram}
+                    onChange={handleChange}
+                    placeholder="https://instagram.com/your"
+                    disabled={!isEditing}
+                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                  />
+                </div>
+
+                {/* Website */}
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <img src="Vector (11).png" alt="Website" className="w-4 h-4 object-contain" />
+                    <span className="text-white text-sm font-semibold">Website</span>
+                  </div>
+                  <input
+                    type="url"
+                    name="website"
+                    value={profile.website}
+                    onChange={handleChange}
+                    placeholder="https://your-website.com"
+                    disabled={!isEditing}
+                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                  />
+                </div>
+
               </div>
             </div>
 
+
             {/* Danger Zone */}
             <div className="pt-4 border-t border-[#18181B]">
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-red-600 rounded-md text-white font-semibold"
-              >
-                Logout
-              </button>
+              <h1 className="text-red-500 mb-3 font-semibold">Danger Zone</h1>
+              <div>
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-2.5 bg-red-500 rounded-lg text-white font-semibold flex items-center gap-2 cursor-pointer text-lg"
+                >
+                  <img src="Vector (12).png" alt="Logout Icon" className="w-6 h-6 object-contain" />
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
         </div>

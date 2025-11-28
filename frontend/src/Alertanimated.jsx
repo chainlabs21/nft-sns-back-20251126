@@ -16,7 +16,7 @@ export default function AnimatedAlert({
 
   return (
     <div
-      className={`fixed right-8 top-20 bg-black border ${styles[type]}
+      className={`fixed right-55 top-120 bg-black border ${styles[type]}
       rounded-xl px-6 py-4 w-80 shadow-xl z-[9999] animate-fade-slide`}
     >
       {/* Close Button */}

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { ethers } from "ethers";
-import { Wallet, ArrowLeft, X } from "lucide-react";
+import { Wallet, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import metamask from "../public/metafosk.png";
@@ -9,6 +9,7 @@ import coinbaseIcon from "../public/stuit.png";
 import tickIcon from "../public/check Icon.png";
 
 import WalletConnectProvider from "@walletconnect/ethereum-provider";
+import AnimatedAlert from "./Alertanimated"; // ✅ Import your custom alert
 
 export default function Wallets() {
   const [isConnected, setIsConnected] = useState(false);
@@ -17,19 +18,19 @@ export default function Wallets() {
   const [balance, setBalance] = useState(null);
   const [network, setNetwork] = useState("");
   const [chainId, setChainId] = useState(null);
-  const [alert, setAlert] = useState(null);
+  const [alert, setAlert] = useState(null); // { type: 'success' | 'error' | 'warning' | 'info', message: string }
 
-  // --------------------------------------------------
+  // -------------------------
   // GET ETHERS PROVIDER
-  // --------------------------------------------------
+  // -------------------------
   const getProvider = (externalProvider) => {
     if (!externalProvider) return null;
     return new ethers.BrowserProvider(externalProvider);
   };
 
-  // --------------------------------------------------
+  // -------------------------
   // LOAD ACCOUNT DATA
-  // --------------------------------------------------
+  // -------------------------
   const loadAccountData = useCallback(async (acct, provider) => {
     try {
       if (!provider) return;
@@ -41,13 +42,13 @@ export default function Wallets() {
       setNetwork(net.name);
     } catch (err) {
       console.error(err);
-      setAlert("error: " + err.message);
+      setAlert({ type: "error", message: err.message });
     }
   }, []);
 
-  // --------------------------------------------------
+  // -------------------------
   // REGISTER WALLET IN BACKEND
-  // --------------------------------------------------
+  // -------------------------
   const registerWalletBackend = async (address) => {
     try {
       const token = localStorage.getItem("token");
@@ -65,44 +66,43 @@ export default function Wallets() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
 
-      setAlert("connected");
+      setAlert({ type: "success", message: "Wallet connected successfully!" });
       setIsConnected(true);
     } catch (err) {
       console.error(err);
-      setAlert("error: " + err.message);
+      setAlert({ type: "error", message: err.message });
     }
   };
 
-  // --------------------------------------------------
+  // -------------------------
   // DISCONNECT WALLET
-  // --------------------------------------------------
+  // -------------------------
   const disconnectWallet = async (silent = false) => {
-  if (window.wcProvider?.disconnect) await window.wcProvider.disconnect();
+    if (window.wcProvider?.disconnect) await window.wcProvider.disconnect();
 
-  setSelectedWallet(null);
-  setIsConnected(false);
-  setWalletAddress("");
-  setBalance(null);
-  setNetwork("");
-  setChainId(null);
+    setSelectedWallet(null);
+    setIsConnected(false);
+    setWalletAddress("");
+    setBalance(null);
+    setNetwork("");
+    setChainId(null);
 
-  if (!silent) setAlert("disconnected");
-};
+    if (!silent)
+      setAlert({ type: "warning", message: "Wallet disconnected." });
+  };
 
-  
   // -------------------------
   // USE EFFECT
   // -------------------------
   useEffect(() => {
     const { metaMask, coinbase } = detectInjectedWallets();
-
     console.log("MetaMask Installed:", !!metaMask);
     console.log("Coinbase Installed:", !!coinbase);
   }, []);
 
-  // --------------------------------------------------
-  // EXTENSION DETECTION (VERY IMPORTANT)
-  // --------------------------------------------------
+  // -------------------------
+  // DETECT INJECTED WALLETS
+  // -------------------------
   const detectInjectedWallets = () => {
     const { ethereum } = window;
     let metaMask = null;
@@ -110,7 +110,6 @@ export default function Wallets() {
 
     if (!ethereum) return { metaMask, coinbase };
 
-    // Multi-provider injection (MetaMask + Coinbase)
     if (ethereum.providers?.length) {
       ethereum.providers.forEach((p) => {
         if (p.isMetaMask) metaMask = p;
@@ -118,21 +117,27 @@ export default function Wallets() {
       });
     }
 
-    // Single provider fallback
     if (ethereum.isMetaMask) metaMask = ethereum;
     if (ethereum.isCoinbaseWallet) coinbase = ethereum;
 
     return { metaMask, coinbase };
   };
 
-  // --------------------------------------------------
-  // CONNECT METAMASK (EXTENSION)
-  // --------------------------------------------------
+  // -------------------------
+  // CONNECT EXTENSIONS
+  // -------------------------
   const connectMetaMask = async () => {
     try {
       const { metaMask } = detectInjectedWallets();
       if (!metaMask) throw new Error("Please install MetaMask extension.");
 
+      // 🔥 Force MetaMask to ask again instead of auto-returning previous address
+      await metaMask.request({
+        method: "wallet_requestPermissions",
+        params: [{ eth_accounts: {} }],
+      });
+
+      // Now this returns a fresh account with user approval
       const accounts = await metaMask.request({
         method: "eth_requestAccounts",
       });
@@ -141,47 +146,44 @@ export default function Wallets() {
       setWalletAddress(address);
 
       const provider = new ethers.BrowserProvider(metaMask);
-
       await loadAccountData(address, provider);
+
       await registerWalletBackend(address);
 
       setSelectedWallet("MetaMask");
       setIsConnected(true);
+
     } catch (err) {
-      setAlert("error: " + err.message);
+      setAlert({ type: "error", message: err.message });
     }
   };
 
-  // --------------------------------------------------
-  // CONNECT COINBASE (EXTENSION)
-  // --------------------------------------------------
   const connectCoinbase = async () => {
     try {
       const { coinbase } = detectInjectedWallets();
       if (!coinbase) throw new Error("Please install Coinbase Wallet extension.");
+      await coinbase.request({
+        method: "wallet_requestPermissions",
+        params: [{ eth_accounts: {} }],
+      });
 
       const accounts = await coinbase.request({
         method: "eth_requestAccounts",
       });
-
       const address = accounts[0];
       setWalletAddress(address);
 
       const provider = new ethers.BrowserProvider(coinbase);
-
       await loadAccountData(address, provider);
       await registerWalletBackend(address);
 
       setSelectedWallet("Coinbase");
       setIsConnected(true);
     } catch (err) {
-      setAlert("error: " + err.message);
+      setAlert({ type: "error", message: err.message });
     }
   };
 
-  // --------------------------------------------------
-  // CONNECT WALLETCONNECT
-  // --------------------------------------------------
   const connectWalletConnect = async () => {
     try {
       if (window.wcProvider?.disconnect) await window.wcProvider.disconnect();
@@ -195,7 +197,6 @@ export default function Wallets() {
       window.wcProvider = wcProvider;
 
       await wcProvider.enable();
-
       const provider = getProvider(wcProvider);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
@@ -205,39 +206,28 @@ export default function Wallets() {
 
       await loadAccountData(address, provider);
       await registerWalletBackend(address);
-
     } catch (err) {
-      setAlert("error: " + err.message);
+      setAlert({ type: "error", message: err.message });
     }
   };
 
-  // --------------------------------------------------
-  // WALLET SELECT HANDLER
-  // --------------------------------------------------
+  // -------------------------
+  // HANDLE WALLET SELECT
+  // -------------------------
   const handleWalletSelect = async (wallet) => {
-  await disconnectWallet(true); // <-- NO ALERT
-  setSelectedWallet(wallet);
+    await disconnectWallet(true); // silent
+    setSelectedWallet(wallet);
 
-  if (wallet === "MetaMask") connectMetaMask();
-  else if (wallet === "Coinbase") connectCoinbase();
-  else if (wallet === "WalletConnect") connectWalletConnect();
-};
+    if (wallet === "MetaMask") connectMetaMask();
+    else if (wallet === "Coinbase") connectCoinbase();
+    else if (wallet === "WalletConnect") connectWalletConnect();
+  };
 
-
-  // --------------------------------------------------
-  // UI
-  // --------------------------------------------------
+  // -------------------------
+  // RENDER
+  // -------------------------
   return (
-    <div className="relative min-h-screen bg-black flex flex-col items-center justify-center px-4 py-10 text-white">
-
-      {/* Back Button */}
-      <Link
-        to="/"
-        className="absolute top-6 left-6 flex items-center gap-2 text-gray-400 hover:text-cyan-400"
-      >
-        <ArrowLeft className="w-5 h-5" />
-        <span className="hidden sm:inline text-sm">Back</span>
-      </Link>
+    <div className="relative min-h-screen border bg-black flex flex-col items-center justify-center px-4 py-10 text-white">
 
       {/* Wallet Icon */}
       <div className="mb-6 mt-8">
@@ -246,21 +236,15 @@ export default function Wallets() {
         </div>
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-        Connect Your Wallet
-      </h1>
-      <p className="text-gray-400 mb-8">Choose your preferred wallet</p>
+      <h1 className="text-3xl sm:text-3xl font-bold mb-2 glow">Connect Your Wallet</h1>
+      <p className="text-gray-400 mb-8 font-medium">Choose your preferred wallet</p>
 
-      <form className="relative w-full max-w-lg bg-black rounded-2xl p-6 sm:p-8 border border-[#18181B] shadow-xl">
+      <form className="relative w-full max-w-lg bg-black rounded-2xl p-6 sm:p-8 border border-[#18181B] shadow-[0_0_20px_rgba(36,203,245,0.3)]">
 
         {/* STATUS */}
         <div className="mb-6">
           <label className="block text-sm mb-2 text-gray-300">Wallet Status</label>
-          <div
-            className={`p-3 rounded-md text-sm border bg-[#09090B4D] ${
-              isConnected ? "border-cyan-500" : "border-[#18181B]"
-            }`}
-          >
+          <div className={`p-3 rounded-md text-sm border bg-[#09090B4D] ${isConnected ? "border-cyan-500" : "border-[#18181B]"}`}>
             {!isConnected ? (
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
@@ -275,9 +259,7 @@ export default function Wallets() {
                 <div>{balance} ETH</div>
 
                 <div className="text-gray-400 text-xs mt-2">Network</div>
-                <div>
-                  {network} (Chain ID: {chainId})
-                </div>
+                <div>{network} (Chain ID: {chainId})</div>
               </div>
             )}
           </div>
@@ -293,20 +275,14 @@ export default function Wallets() {
             <div
               key={wallet.name}
               onClick={() => handleWalletSelect(wallet.name)}
-              className={`flex items-center gap-4 p-4 rounded-md cursor-pointer border-2 transition-all bg-[#09090B4D] ${
-                selectedWallet === wallet.name
-                  ? "border-cyan-500 shadow-lg"
-                  : "border-[#18181B] hover:border-cyan-500"
-              }`}
+              className={`flex items-center gap-4 p-4 rounded-md cursor-pointer border-2 transition-all bg-[#09090B4D] ${selectedWallet === wallet.name ? "border-cyan-500 shadow-lg" : "border-[#18181B] hover:border-cyan-500"}`}
             >
               <img src={wallet.icon} className="w-8 h-8" />
               <div className="flex-1">
                 <h3 className="font-semibold">{wallet.name}</h3>
                 <p className="text-gray-400 text-sm">{wallet.name} connect</p>
               </div>
-              {selectedWallet === wallet.name && (
-                <img src={tickIcon} className="w-4 h-4" />
-              )}
+              {selectedWallet === wallet.name && <img src={tickIcon} className="w-4 h-4" />}
             </div>
           ))}
         </div>
@@ -321,52 +297,26 @@ export default function Wallets() {
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row gap-4">
-            <button
-              type="button"
-              onClick={disconnectWallet}
-              className="w-full sm:w-1/2 border border-[#18181B] hover:bg-red-500/10 py-2.5 rounded-md"
-            >
+            <button type="button" onClick={disconnectWallet} className="w-full sm:w-1/2 border border-[#18181B] hover:bg-red-500/10 py-2.5 rounded-md">
               Disconnect Wallet
             </button>
 
-            <Link
-              to="/profile"
-              className="w-full sm:w-1/2 bg-gradient-to-r from-[#24CBF5] to-[#9952E0] text-black text-center py-2.5 rounded-md"
-            >
+            <Link to="/profile" className="w-full sm:w-1/2 bg-gradient-to-r from-[#24CBF5] to-[#9952E0] text-black text-center py-2.5 rounded-md">
               Continue to Profile
             </Link>
           </div>
         )}
       </form>
 
-      {/* ALERT */}
+      {/* ---------------------------
+          CUSTOM ALERT
+      --------------------------- */}
       {alert && (
-        <div
-          className={`fixed right-8 top-20 bg-black border ${
-            alert.includes("connected")
-              ? "border-cyan-500"
-              : alert.includes("disconnected")
-              ? "border-yellow-500"
-              : "border-red-500"
-          } rounded-xl px-6 py-4 w-80 shadow-xl`}
-        >
-          <button
-            onClick={() => setAlert(null)}
-            className="absolute top-2 right-2 text-gray-400 hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
-
-          <h2 className="text-white text-lg font-semibold mb-1">
-            {alert.includes("connected")
-              ? "Wallet Connected"
-              : alert.includes("disconnected")
-              ? "Wallet Disconnected"
-              : "Error"}
-          </h2>
-
-          <p className="text-gray-400 text-sm">{alert}</p>
-        </div>
+        <AnimatedAlert
+          type={alert.type || "info"}
+          message={alert.message}
+          onClose={() => setAlert(null)}
+        />
       )}
     </div>
   );

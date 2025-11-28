@@ -82,12 +82,12 @@ export default function LoginPage() {
       )}
 
       {/* Logo */}
-      <div className="mb-6">
+      <div className="mb-5">
         <img src="logo (2).png" alt="Logo" className="w-20 h-20 object-contain" />
       </div>
 
       {/* Headings */}
-      <h1 className="text-3xl font-bold mb-2 text-center glow">Welcome Back</h1>
+      <h1 className="text-3xl font-bold mb-4 text-center glow">Welcome Back</h1>
       <p className="text-gray-400 mb-8 text-center text-sm sm:text-base">
         Login to your <span className="text-gray-400">MINTIOLAB</span> account
       </p>
@@ -144,9 +144,9 @@ export default function LoginPage() {
 
         {/* Divider */}
         <div className="flex items-center my-6">
-          <div className="flex-grow h-px bg-gray-700"></div>
+          <div className="flex-grow h-px bg-gray-800"></div>
           <span className="text-gray-400 text-xs mx-3">OR CONTINUE WITH</span>
-          <div className="flex-grow h-px bg-gray-700"></div>
+          <div className="flex-grow h-px bg-gray-800"></div>
         </div>
 
         {/* Connect Wallet Button (blocked until login) */}
