@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, ArrowRight, ArrowLeft } from "lucide-react";
+import { Wallet, ArrowRight, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import AnimatedAlert from "./Alertanimated";
 import CustomDropdown from "./customdropdown";
@@ -7,6 +7,11 @@ import CustomDropdown from "./customdropdown";
 export default function RegisterPage() {
   const [showAlert, setShowAlert] = useState(false);
   const navigate = useNavigate();
+  const [successAlert, setSuccessAlert] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+
 
   const [form, setForm] = useState({
     full_name: "",
@@ -62,8 +67,14 @@ export default function RegisterPage() {
 
       const data = await response.json();
       if (response.ok) {
+
         localStorage.setItem("temp_user_id", data.user_id);
-        navigate("/profile");
+
+        setSuccessAlert(true);
+
+        setTimeout(() => {
+          navigate("/verify-email");
+        }, 1500);
       } else {
         setError(data.message || "Registration failed");
       }
@@ -125,34 +136,52 @@ export default function RegisterPage() {
           </div>
 
           {/* Password */}
-          <div className="mb-4">
+          <div className="mb-4 relative">
             <label className="block text-sm text-white mb-1.5">Password</label>
+
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               name="password"
               value={form.password}
               onChange={handleChange}
               placeholder="Enter your password"
-              className="w-full p-3 rounded-md border border-[#18181B]
-              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
-              focus:ring-1 focus:ring-cyan-500"
+              className="w-full p-3 pr-10 rounded-md border border-[#18181B]
+    text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+    focus:ring-1 focus:ring-cyan-500"
             />
+
+            <div
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-13 transform -translate-y-1/2 cursor-pointer text-gray-400"
+            >
+              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </div>
           </div>
 
+
           {/* Confirm Password */}
-          <div className="mb-4">
+          <div className="mb-4 relative">
             <label className="block text-sm text-white mb-1.5">Confirm Password</label>
+
             <input
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               name="confirmPassword"
               value={form.confirmPassword}
               onChange={handleChange}
               placeholder="Re-enter your password"
-              className="w-full p-3 rounded-md border border-[#18181B]
-              text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
-              focus:ring-1 focus:ring-cyan-500"
+              className="w-full p-3 pr-10 rounded-md border border-[#18181B]
+    text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500
+    focus:ring-1 focus:ring-cyan-500"
             />
+
+            <div
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-13 transform -translate-y-1/2 cursor-pointer text-gray-400"
+            >
+              {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+            </div>
           </div>
+
 
           <div className="mb-6">
             <label className="block text-sm text-white mb-1.5">Role</label>
@@ -199,6 +228,16 @@ export default function RegisterPage() {
             <AnimatedAlert
               message="Please create an account first before connecting a wallet."
               onClose={() => setShowAlert(false)}
+            />
+          )}
+
+          {successAlert && (
+            <AnimatedAlert
+              message="Account created! Please verify your email to continue."
+              onClose={() => {
+                setSuccessAlert(false);
+                navigate("/verify-email");
+              }}
             />
           )}
 

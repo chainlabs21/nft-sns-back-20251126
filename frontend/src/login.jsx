@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Wallet, ArrowRight } from "lucide-react";
+import { Wallet, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import AnimatedAlert from "./Alertanimated";
 
@@ -9,6 +9,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [alert, setAlert] = useState(null);
   const [form, setForm] = useState({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
+
 
   useEffect(() => {
     setForm({ email: "", password: "" });
@@ -55,7 +57,13 @@ export default function LoginPage() {
         // Redirect after short delay
         setTimeout(() => {
           navigate("/profile");
-        }, 1200);
+        }, 1500);
+
+      } else if (data.verification_required) {
+        // Unverified user → redirect to verify email
+        localStorage.setItem("temp_user_id", data.user_id);
+        navigate("/verify-email");
+
       } else {
         setAlert({ type: "error", message: data.message || "Login failed" });
       }
@@ -66,8 +74,6 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
-
 
 
   return (
@@ -113,17 +119,29 @@ export default function LoginPage() {
         </div>
 
         {/* Password */}
-        <div className="mb-3">
+        <div className="mb-3 relative">
           <label className="block text-sm text-gray-300 mb-2">Password</label>
+
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             name="password"
             value={form.password}
             onChange={handleChange}
             placeholder="Enter your password"
-            className="w-full p-3 rounded-md bg-[#09090B4D] border border-[#18181B] text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            className="w-full p-3 pr-10 rounded-md bg-[#09090B4D] border border-[#18181B] 
+    text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 
+    focus:ring-1 focus:ring-cyan-500"
           />
+
+          {/* Eye Toggle Icon */}
+          <div
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-14 transform -translate-y-1/2 cursor-pointer text-gray-400"
+          >
+            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+          </div>
         </div>
+
 
         {/* Forgot Password */}
         <div className="text-right mb-6">

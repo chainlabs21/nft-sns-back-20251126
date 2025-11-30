@@ -5,6 +5,7 @@ import ProfileSettings from "./profile.jsx";
 import Wallets from "./wallets.jsx";
 import Login from "./login.jsx";
 import RegisterPage from "./register.jsx";
+import VerifyEmailPage from "./VerifyEmailPage.jsx";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/wallets" element={<Wallets />} />
         <Route path="/profile" element={<ProfileSettings />} />
+        <Route path="/verify-email" element={<VerifyEmailPage/>}/>
 
         {/* Optional: fallback for unknown routes */}
         <Route

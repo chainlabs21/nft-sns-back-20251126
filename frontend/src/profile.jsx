@@ -1,7 +1,6 @@
-
 // ProfileSettings.jsx
 import React, { useEffect, useState } from "react";
-import { X, Save } from "lucide-react";
+import { X, Save , Camera } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./navbar.jsx";
 import AnimatedAlert from "./Alertanimated.jsx";
@@ -16,13 +15,18 @@ export default function ProfileSettings() {
     instagram: "",
     website: "",
     id: null,
-    UserWallets: [],   // ✅ ADD THIS
+    UserWallets: [],
+    profileImage: "", // ✅ new field for profile image
   });
 
+  const [previewImage, setPreviewImage] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Add to state
+  const [selectedImage, setSelectedImage] = useState(null); // file object
+
 
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -34,7 +38,7 @@ export default function ProfileSettings() {
     return headers;
   };
 
-  // Helper: show alert for x seconds
+  // Helper: show alert
   const fireAlert = (name, ms = 3000) => {
     setAlert(name);
     setTimeout(() => setAlert(null), ms);
@@ -79,7 +83,8 @@ export default function ProfileSettings() {
           instagram: p.instagram || "",
           website: p.website || "",
           id: p.id || prev.id,
-          UserWallets: p.UserWallets || [],  // ✅ ADD THIS
+          UserWallets: p.UserWallets || [],
+          profileImage: p.profileImage || "", // ✅ fetch image
         }));
 
         setLoading(false);
@@ -107,9 +112,15 @@ export default function ProfileSettings() {
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
 
-  // -------------------------
-  // SAVE PROFILE
-  // -------------------------
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setSelectedImage(file); // store the file for upload
+    setPreviewImage(URL.createObjectURL(file)); // preview locally
+  };
+
+
   const handleSave = async () => {
     if (!token) {
       navigate("/login");
@@ -119,18 +130,23 @@ export default function ProfileSettings() {
     setSaving(true);
 
     try {
-      const body = {
-        full_name: profile.displayName,
-        bio: profile.bio,
-        twitter: profile.twitter,
-        instagram: profile.instagram,
-        website: profile.website,
-      };
+      const formData = new FormData();
+      formData.append("full_name", profile.displayName);
+      formData.append("bio", profile.bio);
+      formData.append("twitter", profile.twitter);
+      formData.append("instagram", profile.instagram);
+      formData.append("website", profile.website);
+
+      if (selectedImage) {
+        formData.append("profileImage", selectedImage); // must match multer field
+      }
 
       const res = await fetch(`${API_BASE}/api/user/profile`, {
         method: "PUT",
-        headers: authHeaders(true),
-        body: JSON.stringify(body),
+        headers: {
+          Authorization: `Bearer ${token}`, // don't set Content-Type! Let browser set it
+        },
+        body: formData,
       });
 
       if (res.status === 401) {
@@ -144,6 +160,16 @@ export default function ProfileSettings() {
         throw new Error(err.message || "Failed to save profile");
       }
 
+      const data = await res.json();
+
+      // Update profileImage in state immediately
+      setProfile((prev) => ({
+        ...prev,
+        profileImage: data.profileImage || prev.profileImage,
+      }));
+
+      setPreviewImage(null); // clear preview
+      setSelectedImage(null);
       fireAlert("profileSaved");
       setIsEditing(false);
     } catch (err) {
@@ -154,13 +180,31 @@ export default function ProfileSettings() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    navigate("/login");
+  // Logout 
+  const handleLogout = async () => {
+    // Reset wallet state in Profile
+    setProfile((prev) => ({
+      ...prev,
+      UserWallets: prev.UserWallets.map((w) => ({ ...w, is_active: false })),
+    }));
+
+    // Clear Wallets page state (if using localStorage)
+    localStorage.removeItem("walletAddress");
+    localStorage.removeItem("selectedWallet");
+
+    // Set alert
+    setAlert("loggedOut");
+
+    // Clear auth token after alert is visible
+    setTimeout(() => {
+      localStorage.clear(); // clear token after alert
+      navigate("/login");
+    }, 1500); 
   };
 
 
-  /// -------------------------
+
+  // -------------------------
   // DISCONNECT WALLET
   // -------------------------
   const handleDisconnectWallet = async () => {
@@ -175,10 +219,9 @@ export default function ProfileSettings() {
         return;
       }
 
-      // Remove active wallet from state
       setProfile((prev) => ({
         ...prev,
-        UserWallets: prev.UserWallets.map(w => ({ ...w, is_active: false })), // mark all wallets inactive
+        UserWallets: prev.UserWallets.map((w) => ({ ...w, is_active: false })),
       }));
 
       fireAlert("walletDisconnected");
@@ -187,7 +230,6 @@ export default function ProfileSettings() {
       fireAlert("failedDisconnect");
     }
   };
-
 
   if (loading) return <div className="text-white p-6">Loading profile...</div>;
 
@@ -201,7 +243,9 @@ export default function ProfileSettings() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Profile Settings</h1>
-            <p className="text-gray-400 text-sm sm:text-base">Manage your creator profile and settings</p>
+            <p className="text-gray-400 text-sm sm:text-base">
+              Manage your creator profile and settings
+            </p>
           </div>
 
           {/* Buttons */}
@@ -242,12 +286,42 @@ export default function ProfileSettings() {
           <div className="space-y-6">
             {/* Profile Card */}
             <div className="bg-[#13131680] rounded-xl p-5 sm:p-6 flex flex-col items-center text-center shadow-md border border-[#18181B]">
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#111111] flex items-center justify-center overflow-hidden">
-                <img src="avatarusrer 1.png" alt="Profile" className="w-full h-full object-cover rounded-full" />
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#111111] flex items-center justify-center overflow-hidden relative group">
+                <img
+                  src={
+                    previewImage ||
+                    profile.profileImage || // load from backend if exists
+                    "avatarusrer 1.png"
+                  }
+                  alt="Profile"
+                  className="w-full h-full object-cover rounded-full"
+                />
+
+                {isEditing && (
+                  <>
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+
+                    {/* Camera overlay appears on hover */}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded-full z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                      <Camera className="w-6 h-6 text-white" />
+                    </div>
+                  </>
+                )}
               </div>
-              <h2 className="mt-3 text-lg sm:text-xl font-semibold text-white">{profile.displayName || "Creator Name"}</h2>
-              <p className="text-gray-400 text-sm">Creator</p>
-            </div>
+
+
+              <h2 className="mt-3 text-lg sm:text-xl font-semibold text-white">
+                {profile.displayName || "Creator Name"}
+              </h2>
+              <p className="text-gray-400 text-md">
+                {profile.role ? profile.role : "User"}
+              </p>            </div>
 
             {/* Stats */}
             <div className="bg-[#13131680] rounded-xl p-5 sm:p-6 space-y-3 shadow-md border border-[#18181B]">
@@ -256,7 +330,10 @@ export default function ProfileSettings() {
                 <h3 className="text-sm font-semibold text-white uppercase">Stats</h3>
               </div>
               <div className="text-sm text-gray-300">
-                <div className="flex justify-between"><span>NFTs Created</span><span className="font-semibold">42</span></div>
+                <div className="flex justify-between">
+                  <span>NFTs Created</span>
+                  <span className="font-semibold">42</span>
+                </div>
                 <div className="flex justify-between mt-2 items-center">
                   <span>Likes Received</span>
                   <span className="font-semibold flex items-center gap-2">
@@ -271,7 +348,6 @@ export default function ProfileSettings() {
                     #156
                   </span>
                 </div>
-
               </div>
             </div>
 
@@ -283,11 +359,9 @@ export default function ProfileSettings() {
               </h3>
 
               {(() => {
-                // Find active wallet
-                const activeWallet = profile.UserWallets?.find(w => w.is_active);
+                const activeWallet = profile.UserWallets?.find((w) => w.is_active);
 
                 if (activeWallet) {
-                  // Wallet is connected
                   return (
                     <>
                       <p className="text-sm text-gray-300">Connected Wallet:</p>
@@ -303,7 +377,6 @@ export default function ProfileSettings() {
                     </>
                   );
                 } else {
-                  // No wallet connected
                   return (
                     <>
                       <p className="text-sm text-gray-300">No wallet connected</p>
@@ -325,7 +398,9 @@ export default function ProfileSettings() {
                 <img src="share icon.png" />
                 <h3 className="text-sm font-semibold text-white">Social Distribution</h3>
               </div>
-              <p className="text-gray-400 text-sm">Manage your social media integrations and automated content distribution.</p>
+              <p className="text-gray-400 text-sm">
+                Manage your social media integrations and automated content distribution.
+              </p>
               <button className="mt-3 px-3 py-2 rounded-md border border-[#18181B] bg-[#09090B4D] text-white text-sm w-full">
                 Manage Connections
               </button>
@@ -345,7 +420,8 @@ export default function ProfileSettings() {
                 value={profile.displayName}
                 onChange={handleChange}
                 disabled={!isEditing}
-                className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 focus:outline-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 focus:outline-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"
+                  }`}
               />
             </div>
 
@@ -358,7 +434,8 @@ export default function ProfileSettings() {
                 value={profile.bio}
                 onChange={handleChange}
                 disabled={!isEditing}
-                className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 resize-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 resize-none ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"
+                  }`}
               />
             </div>
 
@@ -366,7 +443,6 @@ export default function ProfileSettings() {
             <div>
               <h4 className="text-sm text-white uppercase mb-4 sm:mb-6">Social Links</h4>
               <div className="space-y-4">
-
                 {/* Twitter */}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -380,7 +456,8 @@ export default function ProfileSettings() {
                     onChange={handleChange}
                     placeholder="https://twitter.com/your"
                     disabled={!isEditing}
-                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                    className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"
+                      }`}
                   />
                 </div>
 
@@ -397,7 +474,8 @@ export default function ProfileSettings() {
                     onChange={handleChange}
                     placeholder="https://instagram.com/your"
                     disabled={!isEditing}
-                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                    className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"
+                      }`}
                   />
                 </div>
 
@@ -414,13 +492,12 @@ export default function ProfileSettings() {
                     onChange={handleChange}
                     placeholder="https://your-website.com"
                     disabled={!isEditing}
-                    className={`w-full bg-[#09090B4D] border border-gray-800  rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"}`}
+                    className={`w-full bg-[#09090B4D] border border-gray-800 rounded-md px-3 py-2 text-sm sm:text-base text-gray-300 ${isEditing ? "focus:border-[#9952E0]" : "opacity-60 cursor-not-allowed"
+                      }`}
                   />
                 </div>
-
               </div>
             </div>
-
 
             {/* Danger Zone */}
             <div className="pt-4 border-t border-[#18181B]">
@@ -443,7 +520,9 @@ export default function ProfileSettings() {
       {alert && (
         <AnimatedAlert
           type={
-            alert === "profileSaved" || alert === "walletDisconnected"
+            alert === "profileSaved" ||
+              alert === "walletDisconnected" ||
+              alert === "loggedOut"
               ? "success"
               : "error"
           }
@@ -452,17 +531,18 @@ export default function ProfileSettings() {
               ? "Your profile changes have been saved."
               : alert === "walletDisconnected"
                 ? "Wallet disconnected successfully."
-                : alert === "failedFetch"
-                  ? "Could not load profile. Refresh or try later."
-                  : alert === "failedSave"
-                    ? "Could not save changes. Try again."
-                    : alert === "failedDisconnect"
-                      ? "Could not disconnect wallet. Try again."
-                      : "Something went wrong."
+                : alert === "loggedOut"
+                  ? "You have been logged out successfully."
+                  : alert === "failedFetch"
+                    ? "Could not load profile. Refresh or try later."
+                    : alert === "failedSave"
+                      ? "Could not save changes. Try again."
+                      : alert === "failedDisconnect"
+                        ? "Could not disconnect wallet. Try again."
+                        : "Something went wrong."
           }
           onClose={() => setAlert(null)}
         />
-
       )}
 
     </div>

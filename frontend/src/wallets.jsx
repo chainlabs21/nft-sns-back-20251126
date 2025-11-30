@@ -9,7 +9,7 @@ import coinbaseIcon from "../public/stuit.png";
 import tickIcon from "../public/check Icon.png";
 
 import WalletConnectProvider from "@walletconnect/ethereum-provider";
-import AnimatedAlert from "./Alertanimated"; // ✅ Import your custom alert
+import AnimatedAlert from "./Alertanimated";
 
 export default function Wallets() {
   const [isConnected, setIsConnected] = useState(false);
@@ -18,15 +18,15 @@ export default function Wallets() {
   const [balance, setBalance] = useState(null);
   const [network, setNetwork] = useState("");
   const [chainId, setChainId] = useState(null);
-  const [alert, setAlert] = useState(null); // { type: 'success' | 'error' | 'warning' | 'info', message: string }
+  const [alert, setAlert] = useState(null);
 
-  // -------------------------
-  // GET ETHERS PROVIDER
-  // -------------------------
-  const getProvider = (externalProvider) => {
-    if (!externalProvider) return null;
-    return new ethers.BrowserProvider(externalProvider);
-  };
+  // // -------------------------
+  // // GET ETHERS PROVIDER
+  // // -------------------------
+  // const getProvider = (externalProvider) => {
+  //   if (!externalProvider) return null;
+  //   return new ethers.BrowserProvider(externalProvider);
+  // };
 
   // -------------------------
   // LOAD ACCOUNT DATA
@@ -49,7 +49,7 @@ export default function Wallets() {
   // -------------------------
   // REGISTER WALLET IN BACKEND
   // -------------------------
-  const registerWalletBackend = async (address) => {
+  const registerWalletBackend = async (address, walletName) => {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("User not logged in");
@@ -64,13 +64,22 @@ export default function Wallets() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+
+      if (!res.ok) {
+        if (data.message.includes("linked to another user")) {
+          setWalletAddress("");
+          setSelectedWallet(null);
+          setIsConnected(false);
+        }
+        throw new Error(data.message);
+      }
 
       setAlert({ type: "success", message: "Wallet connected successfully!" });
-      setIsConnected(true);
+      return { address, walletName };
     } catch (err) {
       console.error(err);
       setAlert({ type: "error", message: err.message });
+      return null;
     }
   };
 
@@ -90,15 +99,6 @@ export default function Wallets() {
     if (!silent)
       setAlert({ type: "warning", message: "Wallet disconnected." });
   };
-
-  // -------------------------
-  // USE EFFECT
-  // -------------------------
-  useEffect(() => {
-    const { metaMask, coinbase } = detectInjectedWallets();
-    console.log("MetaMask Installed:", !!metaMask);
-    console.log("Coinbase Installed:", !!coinbase);
-  }, []);
 
   // -------------------------
   // DETECT INJECTED WALLETS
@@ -131,105 +131,115 @@ export default function Wallets() {
       const { metaMask } = detectInjectedWallets();
       if (!metaMask) throw new Error("Please install MetaMask extension.");
 
-      // 🔥 Force MetaMask to ask again instead of auto-returning previous address
       await metaMask.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
       });
-
-      // Now this returns a fresh account with user approval
-      const accounts = await metaMask.request({
-        method: "eth_requestAccounts",
-      });
-
+      const accounts = await metaMask.request({ method: "eth_requestAccounts" });
       const address = accounts[0];
-      setWalletAddress(address);
 
       const provider = new ethers.BrowserProvider(metaMask);
       await loadAccountData(address, provider);
 
-      await registerWalletBackend(address);
-
-      setSelectedWallet("MetaMask");
-      setIsConnected(true);
-
+      const wallet = await registerWalletBackend(address, "MetaMask");
+      if (wallet) {
+        setWalletAddress(wallet.address);
+        setSelectedWallet(wallet.walletName);
+        setIsConnected(true);
+      }
     } catch (err) {
+      console.error(err);
       setAlert({ type: "error", message: err.message });
     }
   };
 
-  const connectCoinbase = async () => {
-    try {
-      const { coinbase } = detectInjectedWallets();
-      if (!coinbase) throw new Error("Please install Coinbase Wallet extension.");
-      await coinbase.request({
-        method: "wallet_requestPermissions",
-        params: [{ eth_accounts: {} }],
-      });
+  // const connectCoinbase = async () => {
+  //   try {
+  //     const { coinbase } = detectInjectedWallets();
+  //     if (!coinbase) throw new Error("Please install Coinbase Wallet extension.");
 
-      const accounts = await coinbase.request({
-        method: "eth_requestAccounts",
-      });
-      const address = accounts[0];
-      setWalletAddress(address);
+  //     await coinbase.request({
+  //       method: "wallet_requestPermissions",
+  //       params: [{ eth_accounts: {} }],
+  //     });
 
-      const provider = new ethers.BrowserProvider(coinbase);
-      await loadAccountData(address, provider);
-      await registerWalletBackend(address);
+  //     const accounts = await coinbase.request({ method: "eth_requestAccounts" });
+  //     const address = accounts[0];
 
-      setSelectedWallet("Coinbase");
-      setIsConnected(true);
-    } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    }
-  };
+  //     const provider = new ethers.BrowserProvider(coinbase);
+  //     await loadAccountData(address, provider);
 
-  const connectWalletConnect = async () => {
-    try {
-      if (window.wcProvider?.disconnect) await window.wcProvider.disconnect();
+  //     const wallet = await registerWalletBackend(address, "Coinbase");
+  //     if (wallet) {
+  //       setWalletAddress(wallet.address);
+  //       setSelectedWallet(wallet.walletName);
+  //       setIsConnected(true);
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     setAlert({ type: "error", message: err.message });
+  //   }
+  // };
 
-      const wcProvider = await WalletConnectProvider.init({
-        projectId: "31e35412b28df048fca658f48c492f62",
-        chains: [1],
-        showQrModal: true,
-      });
+  // const connectWalletConnect = async () => {
+  //   try {
+  //     if (window.wcProvider?.disconnect) await window.wcProvider.disconnect();
 
-      window.wcProvider = wcProvider;
+  //     const wcProvider = await WalletConnectProvider.init({
+  //       projectId: "31e35412b28df048fca658f48c492f62",
+  //       chains: [1],
+  //       showQrModal: true,
+  //     });
 
-      await wcProvider.enable();
-      const provider = getProvider(wcProvider);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
+  //     window.wcProvider = wcProvider;
+  //     await wcProvider.enable();
 
-      setWalletAddress(address);
-      setSelectedWallet("WalletConnect");
+  //     const provider = getProvider(wcProvider);
+  //     const signer = await provider.getSigner();
+  //     const address = await signer.getAddress();
 
-      await loadAccountData(address, provider);
-      await registerWalletBackend(address);
-    } catch (err) {
-      setAlert({ type: "error", message: err.message });
-    }
-  };
+  //     await loadAccountData(address, provider);
+
+  //     const wallet = await registerWalletBackend(address, "WalletConnect");
+  //     if (wallet) {
+  //       setWalletAddress(wallet.address);
+  //       setSelectedWallet(wallet.walletName);
+  //       setIsConnected(true);
+  //     }
+  //   } catch (err) {
+  //     console.error(err);
+  //     setAlert({ type: "error", message: err.message });
+  //   }
+  // };
 
   // -------------------------
   // HANDLE WALLET SELECT
   // -------------------------
   const handleWalletSelect = async (wallet) => {
-    await disconnectWallet(true); // silent
-    setSelectedWallet(wallet);
-
-    if (wallet === "MetaMask") connectMetaMask();
-    else if (wallet === "Coinbase") connectCoinbase();
-    else if (wallet === "WalletConnect") connectWalletConnect();
+    if (wallet === "MetaMask") {
+      await disconnectWallet(true); // silent
+      connectMetaMask();
+    } else {
+      // For Coinbase and WalletConnect, show alert
+      setAlert({ type: "error", message: "Service not available." });
+    }
   };
+
+
+  // -------------------------
+  // USE EFFECT
+  // -------------------------
+  useEffect(() => {
+    const { metaMask, coinbase } = detectInjectedWallets();
+    console.log("MetaMask Installed:", !!metaMask);
+    console.log("Coinbase Installed:", !!coinbase);
+  }, []);
 
   // -------------------------
   // RENDER
   // -------------------------
   return (
     <div className="relative min-h-screen border bg-black flex flex-col items-center justify-center px-4 py-10 text-white">
-
-      {/* Wallet Icon */}
       <div className="mb-6 mt-8">
         <div className="p-4 rounded-2xl bg-gradient-to-r from-[#24CBF5] to-[#9952E0] shadow-lg">
           <Wallet className="h-10 w-10 text-white" />
@@ -240,8 +250,6 @@ export default function Wallets() {
       <p className="text-gray-400 mb-8 font-medium">Choose your preferred wallet</p>
 
       <form className="relative w-full max-w-lg bg-black rounded-2xl p-6 sm:p-8 border border-[#18181B] shadow-[0_0_20px_rgba(36,203,245,0.3)]">
-
-        {/* STATUS */}
         <div className="mb-6">
           <label className="block text-sm mb-2 text-gray-300">Wallet Status</label>
           <div className={`p-3 rounded-md text-sm border bg-[#09090B4D] ${isConnected ? "border-cyan-500" : "border-[#18181B]"}`}>
@@ -265,7 +273,6 @@ export default function Wallets() {
           </div>
         </div>
 
-        {/* WALLET OPTIONS */}
         <div className="space-y-5 mb-6">
           {[
             { name: "MetaMask", icon: metamask },
@@ -287,7 +294,6 @@ export default function Wallets() {
           ))}
         </div>
 
-        {/* BUTTONS */}
         {!isConnected ? (
           <div className="flex justify-center">
             <Link to="/login" className="text-gray-300 hover:text-cyan-400">
@@ -308,9 +314,6 @@ export default function Wallets() {
         )}
       </form>
 
-      {/* ---------------------------
-          CUSTOM ALERT
-      --------------------------- */}
       {alert && (
         <AnimatedAlert
           type={alert.type || "info"}

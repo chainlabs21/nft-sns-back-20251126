@@ -3,11 +3,44 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const { Op } = require("sequelize");
-require("dotenv").config(); 
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+require("dotenv").config();
 
 const sequelize = require("./sequelize");
 const User = require("./User");
 const UserWallet = require("./UserWalle")
+
+const { sendVerificationEmail } = require("./emailService");
+
+// -------------------------
+// MULTER CONFIG
+// -------------------------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, "uploads", "profiles");
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${req.user.id}_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+    if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
+      return cb(new Error("Only images are allowed"));
+    }
+    cb(null, true);
+  },
+});
 
 const app = express();
 app.use(cors());
@@ -32,9 +65,7 @@ function generateToken(user) {
   );
 }
 
-// -------------------------
-// AUTH MIDDLEWARE
-// -------------------------
+// authMiddleware (add this)
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader)
@@ -45,14 +76,23 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
+    console.log('[authMiddleware] decoded token:', decoded); // <--- add
     next();
   } catch (err) {
+    console.error('[authMiddleware] token verify error:', err);
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }
 
 // -------------------------
-// USER SIGNUP (FORM)
+// HELPERS
+// -------------------------
+function generate6DigitCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// -------------------------
+// USER SIGNUP (WITH EMAIL OTP)
 // -------------------------
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -67,22 +107,105 @@ app.post("/api/auth/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const code = generate6DigitCode();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
     const newUser = await User.create({
       full_name,
       email,
       password: hashedPassword,
       role,
+      isVerified: false,
+      verificationCode: code,
+      verificationExpires: expires,
     });
 
+    try {
+      await sendVerificationEmail(email, code);
+    } catch (err) {
+      console.error("Email send error:", err);
+      return res.status(500).json({
+        message: "Failed to send verification email. Try resend later.",
+      });
+    }
+
     return res.status(201).json({
-      message: "Account created successfully",
+      message: "Account created. Verification code sent.",
       user_id: newUser.id,
     });
+
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+// -------------------------
+// VERIFY EMAIL OTP
+// -------------------------
+app.post("/api/auth/verify-email", async (req, res) => {
+  try {
+    const { user_id, code } = req.body;
+
+    if (!user_id || !code)
+      return res.status(400).json({ message: "Missing fields" });
+
+    const user = await User.findByPk(user_id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isVerified)
+      return res.status(400).json({ message: "Email already verified" });
+
+    if (user.verificationCode !== code)
+      return res.status(400).json({ message: "Incorrect code" });
+
+    if (new Date() > user.verificationExpires)
+      return res.status(400).json({ message: "Code expired" });
+
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationExpires = null;
+    await user.save();
+
+    res.json({ message: "Email verified successfully" });
+
+  } catch (err) {
+    console.error("Verify error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.post("/api/auth/resend-otp", async (req, res) => {
+  try {
+    const { user_id } = req.body;
+
+    if (!user_id)
+      return res.status(400).json({ message: "User ID is required" });
+
+    const user = await User.findByPk(user_id);
+    if (!user)
+      return res.status(404).json({ message: "User not found" });
+
+    if (user.isVerified)
+      return res.status(400).json({ message: "Email already verified" });
+
+    const code = generate6DigitCode();
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
+
+    user.verificationCode = code;
+    user.verificationExpires = expires;
+    await user.save();
+
+    await sendVerificationEmail(user.email, code);
+
+    res.json({ message: "Verification code resent" });
+
+  } catch (err) {
+    console.error("Resend OTP error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 // -------------------------
 // LOGIN
@@ -99,11 +222,19 @@ app.post("/api/auth/login", async (req, res) => {
     if (!validPassword)
       return res.status(401).json({ message: "Invalid credentials" });
 
+    // BLOCK LOGIN IF EMAIL NOT VERIFIED
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: "Email not verified",
+        verification_required: true,
+        user_id: user.id,
+      });
+    }
+
     const token = generateToken(user);
 
-    // Fetch the active wallet only
     const activeWallet = await UserWallet.findOne({
-      where: { user_id: user.id, is_active: true }, // or userId / isActive depending on model
+      where: { user_id: user.id, is_active: true },
       attributes: ["id", "address", "is_active"],
     });
 
@@ -114,11 +245,13 @@ app.post("/api/auth/login", async (req, res) => {
       active_wallet: activeWallet || null,
       wallet_connected: !!activeWallet,
     });
+
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
 
 
 // Wallet Connect
@@ -188,8 +321,17 @@ app.patch("/api/wallet/disconnect", authMiddleware, async (req, res) => {
 // -------------------------
 app.get("/api/user/profile", authMiddleware, async (req, res) => {
   try {
+    console.log('[GET /api/user/profile] req.user:', req.user); // <--- add
     const user = await User.findByPk(req.user.id, {
-      attributes: ["id", "full_name", "bio", "twitter", "instagram", "website"],
+      attributes: [
+        "id",
+        "full_name",
+        "bio",
+        "twitter",
+        "instagram",
+        "website",
+        "profileImage",
+      ],
       include: [
         {
           model: UserWallet,
@@ -198,36 +340,78 @@ app.get("/api/user/profile", authMiddleware, async (req, res) => {
       ],
     });
 
-    if (!user)
-      return res.status(404).json({ message: "User not found" });
+    console.log('[GET /api/user/profile] found user:', !!user); // <--- add
 
 
-    res.json({ profile: user.toJSON() });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Prefix profileImage with server URL if it exists
+    let profile = user.toJSON();
+    if (profile.profileImage) {
+      profile.profileImage = `${req.protocol}://${req.get("host")}${profile.profileImage}`;
+    }
+
+    res.json({ profile });
   } catch (err) {
     console.error("Profile fetch error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// -------------------------
-// UPDATE PROFILE
-// -------------------------
-app.put("/api/user/profile", authMiddleware, async (req, res) => {
-  try {
-    const { full_name, bio, twitter, instagram, website } = req.body;
 
-    await User.update(
-      { full_name, bio, twitter, instagram, website },
-      { where: { id: req.user.id } }
-    );
+// -------------------------
+// UPDATE USER PROFILE (WITH IMAGE)
+// -------------------------
+app.put(
+  "/api/user/profile",
+  authMiddleware,
+  upload.single("profileImage"), // must match frontend field name
+  async (req, res) => {
+    try {
+      const { full_name, bio, twitter, instagram, website } = req.body;
 
-    res.json({ message: "Profile updated successfully" });
-  } catch (err) {
-    console.error("Profile update error:", err);
-    res.status(500).json({ message: "Internal server error" });
+      const user = await User.findByPk(req.user.id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      // Update profile fields
+      user.full_name = full_name || user.full_name;
+      user.bio = bio || user.bio;
+      user.twitter = twitter || user.twitter;
+      user.instagram = instagram || user.instagram;
+      user.website = website || user.website;
+
+      // If file uploaded, save path
+      if (req.file) {
+        const fileUrl = `/uploads/profiles/${req.file.filename}`;
+        user.profileImage = fileUrl;
+      }
+
+      await user.save();
+
+      // Return full URL to frontend
+      let profileImageUrl = user.profileImage
+        ? `${req.protocol}://${req.get("host")}${user.profileImage}`
+        : null;
+
+      res.json({
+        message: "Profile updated successfully",
+        profileImage: profileImageUrl,
+      });
+
+    } catch (err) {
+      console.error("Profile update error:", err);
+      res.status(500).json({ message: "Internal server error" });
+    }
   }
-});
+);
 
+// -------------------------
+// SERVE UPLOADED FILES
+// -------------------------
+app.use(
+  "/uploads/profiles",
+  express.static(path.join(__dirname, "uploads", "profiles"))
+);
 // -------------------------
 // START SERVER & SYNC DB
 // -------------------------
