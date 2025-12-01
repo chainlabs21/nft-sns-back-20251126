@@ -4,8 +4,9 @@ import { X, Save, Camera } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "./navbar.jsx";
 import AnimatedAlert from "./Alertanimated.jsx";
+import { BASE_URL } from "./config.js";
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = BASE_URL;
 
 export default function ProfileSettings() {
   const [profile, setProfile] = useState({

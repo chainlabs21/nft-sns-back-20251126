@@ -10,6 +10,7 @@ import tickIcon from "../public/check Icon.png";
 
 import WalletConnectProvider from "@walletconnect/ethereum-provider";
 import AnimatedAlert from "./Alertanimated";
+import { BASE_URL } from "./config";
 
 export default function Wallets() {
   const [isConnected, setIsConnected] = useState(false);
@@ -54,7 +55,7 @@ export default function Wallets() {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("User not logged in");
 
-      const res = await fetch("http://localhost:5000/api/wallet/add", {
+      const res = await fetch(`${BASE_URL}/api/wallet/add`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

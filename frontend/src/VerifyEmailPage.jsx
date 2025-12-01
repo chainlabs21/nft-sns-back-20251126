@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowRight, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AnimatedAlert from "./Alertanimated";
+import { BASE_URL } from "./config";
 
 export default function VerifyEmailPage() {
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ export default function VerifyEmailPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/auth/verify-email", {
+      const response = await fetch(`${BASE_URL}/api/auth/verify-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, code: otp }),
@@ -100,7 +101,7 @@ export default function VerifyEmailPage() {
 
     setResendLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/auth/resend-otp", {
+      const response = await fetch(`${BASE_URL}/api/auth/resend-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId }),

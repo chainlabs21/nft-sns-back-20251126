@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Wallet, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import AnimatedAlert from "./Alertanimated";
+import { BASE_URL } from "./config";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
+      const response = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
