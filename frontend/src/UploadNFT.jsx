@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Navbar from "./navbar";
-import { FiChevronDown } from "react-icons/fi"; 
-import {useNavigate} from 'react-router-dom';
+import { FiChevronDown } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
+import { Check } from "lucide-react";
+import axios from "axios";
+import { BASE_URL } from "./config";
+import AnimatedAlert from "./Alertanimated"; // animated alert component
 
 export default function UploadMintNFT() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -16,9 +21,17 @@ export default function UploadMintNFT() {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [isUploaded, setIsUploaded] = useState(false);
-  const [showAlert, setShowAlert] = useState(false);
   const [previewCleared, setPreviewCleared] = useState(false);
+  const [itemId, setItemId] = useState(null);
 
+  // Animated alert state
+  const [alert, setAlert] = useState({ message: "", type: "" });
+
+  const token = localStorage.getItem("token"); // JWT token stored in localStorage
+
+  // ===========================
+  // 🔥 File Change
+  // ===========================
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
     setIsUploaded(false);
@@ -26,57 +39,134 @@ export default function UploadMintNFT() {
     setProgress(0);
   };
 
-  const handleCancelFile = () => {
+  // ===========================
+  // ❌ Cancel file (remove preview)
+  // ===========================
+  const handleCancelFile = (e) => {
+    e.stopPropagation();
     setFile(null);
-    setIsUploaded(false);
     setPreviewCleared(true);
+    setIsUploaded(false);
     setProgress(0);
   };
 
-  const handleUpload = () => {
+  // Animate progress smoothly
+  const animateProgress = (target) => {
+    let current = progress;
+    const interval = setInterval(() => {
+      if (current >= target) {
+        clearInterval(interval);
+        setProgress(target);
+      } else {
+        current += 1; // increment step
+        setProgress(current);
+      }
+    }, 10); // 10ms per step, adjust for speed
+  };
+
+
+  // ===========================
+  // 🚀 Upload handler
+  // ===========================
+  const handleUpload = async () => {
     if (!file) return;
+
     setIsUploading(true);
     setProgress(0);
     setIsUploaded(false);
-    setShowAlert(false);
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          setIsUploaded(true);
-          setShowAlert(true);
-          return 100;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", title);
+      formData.append("description", description);
+      formData.append("event_id", 1); // optional
+
+      const response = await axios.post(
+        `${BASE_URL}/api/upload-item-file`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
+          },
+          onUploadProgress: (progressEvent) => {
+            if (!progressEvent.total) return;
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            animateProgress(percent);
+          },
         }
-        return prev + 5;
-      });
-    }, 100);
+      );
+
+      setIsUploading(false);
+      setIsUploaded(true);
+      setItemId(response.data.item_id);
+
+      setAlert({ message: "File uploaded successfully!", type: "success" });
+    } catch (err) {
+      console.error("Upload error:", err);
+      setIsUploading(false);
+      setIsUploaded(false);
+      setAlert({ message: "File upload failed!", type: "error" });
+    }
   };
 
-  useEffect(() => {
-    if (showAlert) {
-      const timer = setTimeout(() => setShowAlert(false), 3000);
-      return () => clearTimeout(timer);
+  // ===========================
+  // Mint NFT
+  // ===========================
+  const handleMint = async () => {
+    if (!itemId) {
+      setAlert({ message: "Please upload the file first!", type: "error" });
+      return;
     }
-  }, [showAlert]);
 
-  // ✅ Dropdown Component with white arrow
+    try {
+      await axios.post(
+        `${BASE_URL}/api/update-item-metadata`,
+        {
+          item_id: itemId,
+          title,
+          description,
+          category,
+          tags,
+          royalty,
+          event_id: 1, // optional
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setAlert({ message: "NFT minted successfully!", type: "success" });
+
+    } catch (err) {
+      console.error("Mint NFT error:", err);
+      setAlert({ message: "Failed to mint NFT!", type: "error" });
+    }
+  };
+
+  // ===========================
+  // Dropdown Component
+  // ===========================
   const CustomDropdown = ({ value, onChange, options }) => {
     const [isOpen, setIsOpen] = useState(false);
     return (
       <div className="relative">
         <div
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full cursor-pointer focus:outline-none focus:border-cyan-500 flex items-center justify-between"
+          className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full cursor-pointer flex items-center justify-between"
         >
           <span>{value || "Select category"}</span>
           <FiChevronDown
-            className={`text-white transition-transform duration-300 ${
-              isOpen ? "rotate-180" : ""
-            }`}
+            className={`text-white transition-transform ${isOpen ? "rotate-180" : ""
+              }`}
           />
         </div>
+
         {isOpen && (
           <ul className="absolute z-50 w-full mt-1 bg-[#131316] border border-[#18181B] rounded-md max-h-48 overflow-auto">
             {options.map((option) => (
@@ -100,20 +190,20 @@ export default function UploadMintNFT() {
   return (
     <>
       <Navbar />
+
+      {/* Animated Alert */}
+      {alert.message && (
+        <AnimatedAlert
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert({ message: "", type: "" })}
+        />
+      )}
+
       <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col items-center py-8 px-6 sm:px-10 font-sans relative">
-        {/* ✅ Reduced top padding (py-8 instead of py-16) */}
-
-        {/* ✅ Success Alert */}
-        {showAlert && (
-          <div className="fixed right-6 top-1/2 transform -translate-y-1/2 bg-[#131316] border border-cyan-500 text-white px-5 py-5 rounded-xl shadow-lg text-sm sm:text-base flex items-center gap-2 transition-all">
-            <img src="check (1).png" alt="check" className="object-contain" />
-            Uploaded to IPFS successfully!
-          </div>
-        )}
-
         {/* Header */}
         <div className="w-full max-w-6xl mb-8 text-left space-y-6">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2 glow">
+          <h1 className="text-3xl sm:text-4xl font-bold glow">
             Upload & Mint NFT
           </h1>
           <p className="text-gray-400 text-sm sm:text-base max-w-md">
@@ -121,21 +211,21 @@ export default function UploadMintNFT() {
           </p>
         </div>
 
-        {/* Main Form Grid */}
+        {/* Main Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-6xl">
-          {/* Upload Section */}
-          <div className="bg-[#13131680] border border-[#18181B] rounded-2xl p-6 sm:p-8 shadow-md flex flex-col justify-between h-[500px] transition-all duration-300">
+          {/* Upload Card */}
+          <div className="bg-[#13131680] border border-[#18181B] rounded-2xl p-6 shadow-md h-[500px] flex flex-col justify-between">
             <div>
               <h2 className="text-xl font-semibold mb-4">Upload Asset</h2>
-
-              {/* Upload Area */}
               <label className="relative flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-cyan-500 transition overflow-hidden min-h-[240px]">
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
+                {!file && (
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                )}
 
                 {file && file.type.startsWith("image/") ? (
                   <div className="relative w-full h-48 flex items-center justify-center">
@@ -146,90 +236,78 @@ export default function UploadMintNFT() {
                     />
                     <button
                       onClick={handleCancelFile}
-                      type="button"
-                      className="absolute top-0 right-6 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 text-4xl flex items-center justify-center pb-2.5"
+                      className="absolute -top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 pb-1.5 text-2xl flex items-center justify-center"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : file && file.type.startsWith("video/") ? (
+                  <div className="relative w-full h-48">
+                    <video
+                      src={URL.createObjectURL(file)}
+                      controls
+                      className="object-contain w-full h-full rounded-lg"
+                    />
+                    <button
+                      onClick={handleCancelFile}
+                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 text-xl flex items-center justify-center"
                     >
                       ×
                     </button>
                   </div>
                 ) : previewCleared ? (
-                  <div className="flex flex-col items-center justify-center text-center py-10 text-gray-500">
+                  <div className="flex flex-col items-center justify-center py-10 text-gray-500">
                     <img
                       src="item.png"
-                      alt="Upload Icon"
-                      className="w-16 h-16 object-contain opacity-50 mb-2"
+                      className="w-16 h-16 opacity-50 mb-2"
                     />
-                    <p>Click below to upload a new file</p>
+                    <p>Click to upload a new file</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center text-center py-10">
-                    <img
-                      src="item.png"
-                      alt="Upload Icon"
-                      className="w-16 h-16 object-contain mb-2"
-                    />
+                    <img src="item.png" className="w-16 h-16 mb-2" />
                     <p className="text-gray-300 mb-1">
-                      {file ? (
-                        <span className="text-cyan-400 font-medium">
-                          {file.name}
-                        </span>
-                      ) : (
-                        "Drop your file here or click to browse"
-                      )}
+                      Drop your file here or click to browse
                     </p>
                     <p className="text-gray-500 text-xs">
-                      JPG, PNG, GIF, MP4, WebM (Max 100MB)
+                      JPG, PNG, MP4, WebM (Max 100MB)
                     </p>
                   </div>
                 )}
               </label>
 
-              {/* Upload progress */}
-              <div className="mt-5 transition-all duration-300">
-                {(isUploading || isUploaded) && (
-                  <>
-                    <div className="flex justify-between items-center text-sm text-gray-300 mb-3">
-                      <span>{isUploaded ? "Upload Complete" : "Uploading"}</span>
-                      <span>{progress}%</span>
-                    </div>
-
-                    <div className="relative w-full h-3 bg-gray-800 rounded-full overflow-hidden shadow-inner mb-2">
-                      <div
-                        className="h-full bg-cyan-500 transition-all duration-200 shadow-[0_0_10px_#22d3ee,0_0_20px_#22d3ee,0_0_30px_#22d3ee]"
-                        style={{ width: `${progress}%` }}
-                      ></div>
-                    </div>
-
-                    {isUploaded && (
-                      <div className="flex items-center gap-2 text-cyan-500 font-medium text-sm mb-5">
-                        <img
-                          src="check (1).png"
-                          alt="check"
-                          className="object-contain"
-                        />
-                        <span>Uploaded to IPFS successfully!</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+              {(isUploading || isUploaded) && (
+                <div className="mt-5">
+                  <div className="flex justify-between text-sm text-gray-300 mb-2">
+                    <span>{isUploaded ? "Upload Complete" : "Uploading..."}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-cyan-500 transition-all"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Buttons */}
-            <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center justify-between mt-4">
               <button
                 onClick={handleUpload}
-                disabled={isUploaded}
-                className={`transition-all w-[320px] py-2 rounded-lg font-semibold text-base ${
-                  isUploaded
-                    ? "bg-[#0a0a0a] text-cyan-500 border border-cyan-500 cursor-default"
-                    : "bg-cyan-500 hover:bg-cyan-600 text-black"
-                }`}
+                disabled={isUploaded || !file}
+                className={`transition-all w-[320px] py-2 rounded-lg font-semibold ${isUploaded
+                  ? "bg-black text-cyan-500 border border-cyan-500"
+                  : "bg-cyan-500 hover:bg-cyan-600 text-black"
+                  }`}
               >
-                {isUploaded ? "Uploaded" : "Upload to IPFS"}
+                {isUploaded ? "Uploaded" : "Upload"}
               </button>
 
-              <button className="bg-[#0d0d0d] border-2 border-[#18181B] hover:bg-gray-700 transition-all px-8 py-2 rounded-lg font-semibold text-gray-400 text-md flex items-center gap-2 >" onClick={() => navigate("/nftmodals")} >
+              <button
+                className="bg-[#0d0d0d] border-2 border-[#18181B] hover:bg-gray-700 px-8 py-2 rounded-lg font-semibold text-gray-400 flex items-center gap-2"
+                onClick={() => navigate("/nftmodals")}
+              >
                 <img src="eye.png" alt="Preview" />
                 Preview
               </button>
@@ -237,7 +315,7 @@ export default function UploadMintNFT() {
           </div>
 
           {/* Metadata Section */}
-          <div className="bg-[#13131680] border border-[#18181B] rounded-2xl p-6 sm:p-8 shadow-md">
+          <div className="bg-[#13131680] border border-[#18181B] rounded-2xl p-6 shadow-md">
             <h2 className="text-xl font-semibold mb-4">NFT Metadata</h2>
             <div className="flex flex-col gap-4">
               <div>
@@ -249,9 +327,10 @@ export default function UploadMintNFT() {
                   placeholder="Enter NFT title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full focus:outline-none focus:border-cyan-500"
+                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full"
                 />
               </div>
+
               <div>
                 <label className="text-white text-sm font-medium mb-1 block">
                   Description<span className="text-cyan-500">*</span>
@@ -260,9 +339,10 @@ export default function UploadMintNFT() {
                   placeholder="Describe your NFT"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 h-24 w-full focus:outline-none focus:border-cyan-500"
+                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 h-24 w-full"
                 />
               </div>
+
               <div>
                 <label className="text-white text-sm font-medium mb-1 block">
                   Category
@@ -273,18 +353,20 @@ export default function UploadMintNFT() {
                   options={["Art", "Music", "Video", "Photography"]}
                 />
               </div>
+
               <div>
                 <label className="text-white text-sm font-medium mb-1 block">
                   Tags
                 </label>
                 <input
                   type="text"
-                  placeholder="digital-art, nft, crypto (comma-separated)"
+                  placeholder="digital-art, nft, crypto"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
-                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full focus:outline-none focus:border-cyan-500"
+                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full"
                 />
               </div>
+
               <div>
                 <label className="text-white text-sm font-medium mb-1 block">
                   Royalty Percentage
@@ -295,36 +377,48 @@ export default function UploadMintNFT() {
                   max="50"
                   value={royalty}
                   onChange={(e) => setRoyalty(e.target.value)}
-                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 w-full text-gray-300 focus:outline-none focus:border-cyan-500"
+                  className="bg-[#09090B4D] border border-[#18181B] rounded-md p-3 text-gray-300 w-full"
                 />
-                <p className="text-gray-500 text-xs mt-1">
-                  You’ll receive this royalty on secondary sales (0–50%)
-                </p>
               </div>
-              <label className="flex items-start gap-3 mt-2 relative">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
-                  className="p-2 appearance-none rounded-full border-2 border-cyan-500 bg-black checked:bg-cyan-500 cursor-pointer relative"
-                />
-                {confirmed && (
-                  <span className="absolute left-1 -top-0.5 flex items-center justify-center text-gray-900 font-bold">
-                    ✓
-                  </span>
-                )}
-                <span className="text-gray-400 text-sm leading-snug">
-                  I confirm that I own all rights to this content and have
-                  permission to mint it as an NFT.
+              <label className="flex items-start gap-3 mt-2">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(e) => setConfirmed(e.target.checked)}
+                    className="
+        w-5 h-5 
+        appearance-none 
+        border-2 border-cyan-500 
+        rounded-full 
+        bg-black 
+        checked:bg-cyan-500
+        cursor-pointer
+      "
+                  />
+
+                  {confirmed && (
+                    <Check
+                      size={15}
+                      className="text-white absolute top-2.75 left-2.75 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                    />
+                  )}
+                </div>
+
+                <span className="text-gray-400 text-sm">
+                  I confirm that I own all rights to this content.
                 </span>
               </label>
+
+
+
               <button
                 disabled={!confirmed}
-                className={`w-full py-2 rounded-md font-semibold mt-4 transition-all ${
-                  confirmed
-                    ? "bg-cyan-500 hover:bg-cyan-600 text-black"
-                    : "bg-[#09090B4D] text-gray-600 cursor-not-allowed border border-[#18181B]"
-                }`}
+                onClick={handleMint}
+                className={`w-full py-2 rounded-md font-semibold mt-4 transition-all ${confirmed
+                  ? "bg-cyan-500 hover:bg-cyan-600 text-black"
+                  : "bg-[#09090B4D] text-gray-600 cursor-not-allowed"
+                  }`}
               >
                 Mint NFT
               </button>

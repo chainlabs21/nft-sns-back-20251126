@@ -4,6 +4,8 @@ import { Search, Grid, List, Upload } from "lucide-react";
 import CustomDropdown from "./customdropdown";
 import Navbar from "./navbar";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
 
 export default function MyNFTsPage() {
     const navigate = useNavigate();
@@ -43,16 +45,35 @@ export default function MyNFTsPage() {
                 "A vibrant digital artwork exploring the intersection of technology and imagination.",
             image: "Frame 13 (2).png",
             status: "Draft",
-        },
-        {
-            id: 5,
-            title: "Neon Dreams #247",
-            description:
-                "A vibrant digital artwork exploring the intersection of technology and imagination.",
-            image: "Frame 13 (1).png",
-            status: "Minted",
-        },
+        }
+        
     ];
+
+    const handleAddSNS = async (itemId, snsKind) => {
+    try {
+        const token = localStorage.getItem("token");
+        if (!token) return alert("Login required");
+
+        const payload = {
+            item_id: itemId,
+            sns: [snsKind],          // ✅ FIXED → backend requires array
+            handle: "your_handle_here",
+            url: `https://${snsKind}.com/your_handle`,
+        };
+
+        const res = await axios.post(
+            "http://localhost:5000/api/item/sns/add",
+            payload,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        alert(res.data.message);
+    } catch (err) {
+        console.error("SNS ADD FRONTEND ERROR:", err.response?.data || err);
+        alert("Something went wrong");
+    }
+};
+
 
     return (
         <>
@@ -183,9 +204,21 @@ export default function MyNFTsPage() {
                                             <p>7.5% Royalty</p>
                                         </div>
                                         <div className="flex items-center gap-3 text-xl mt-2 sm:mt-0">
-                                            <FaInstagram className="hover:text-pink-400 cursor-pointer" />
-                                            <FaYoutube className="hover:text-red-500 cursor-pointer" />
-                                            <FaTiktok className="hover:text-cyan-400 cursor-pointer" />
+                                            <div className="flex items-center gap-3 text-xl mt-2 sm:mt-0">
+                                                <FaInstagram
+                                                    onClick={() => handleAddSNS(nft.id, "instagram")}
+                                                    className="hover:text-pink-400 cursor-pointer"
+                                                />
+                                                <FaYoutube
+                                                    onClick={() => handleAddSNS(nft.id, "youtube")}
+                                                    className="hover:text-red-500 cursor-pointer"
+                                                />
+                                                <FaTiktok
+                                                    onClick={() => handleAddSNS(nft.id, "tiktok")}
+                                                    className="hover:text-cyan-400 cursor-pointer"
+                                                />
+                                            </div>
+
                                         </div>
                                     </div>
                                 ) : (
@@ -196,9 +229,19 @@ export default function MyNFTsPage() {
                                             <p>342</p>
                                         </div>
                                         <p>7.5% Royalty</p>
-                                        <FaInstagram className="hover:text-pink-400 cursor-pointer text-white text-xl ml-8 mt-1" />
-                                        <FaYoutube className="hover:text-red-500 cursor-pointer text-white text-xl ml-2 mt-1" />
-                                        <FaTiktok className="hover:text-cyan-400 cursor-pointer text-white text-xl ml- mt-1" />
+                                        <FaInstagram
+                                            onClick={() => handleAddSNS(nft.id, "instagram")}
+                                            className="hover:text-pink-400 cursor-pointer text-white text-xl ml-8 mt-1"
+                                        />
+                                        <FaYoutube
+                                            onClick={() => handleAddSNS(nft.id, "youtube")}
+                                            className="hover:text-red-500 cursor-pointer text-white text-xl ml-2 mt-1"
+                                        />
+                                        <FaTiktok
+                                            onClick={() => handleAddSNS(nft.id, "tiktok")}
+                                            className="hover:text-cyan-400 cursor-pointer text-white text-xl ml-2 mt-1"
+                                        />
+
 
                                     </div>
                                 )}

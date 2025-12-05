@@ -14,10 +14,12 @@ export default function Navbar() {
 
   const links = [
     { name: "Feed", href: "/feed" },
-    { name: "Upload", href: "/uploadnft" },
+    { name: "Upload", href: "/upload" },
     { name: "My NFTs", href: "/mynft" },
     { name: "Distribution", href: "/distribution" },
-    { name: "Leaderboards", href: "/leaderboards" },
+    { name: "Events", href: "/events" },
+    { name: "Leaderboards", href: "/leaderboards" }
+
   ];
 
   useEffect(() => {
@@ -82,11 +84,10 @@ export default function Navbar() {
                 key={link.name}
                 href={link.href}
                 onClick={() => setActiveLink(link.name)}
-                className={`relative font-medium transition duration-200 ${
-                  activeLink === link.name
+                className={`relative font-medium transition duration-200 ${activeLink === link.name
                     ? "text-white"
                     : "text-gray-300 hover:text-cyan-400"
-                }`}
+                  }`}
               >
                 {link.name}
                 {activeLink === link.name && (
@@ -161,11 +162,10 @@ export default function Navbar() {
                   setActiveLink(link.name);
                   setMenuOpen(false);
                 }}
-                className={`relative font-medium transition duration-200 ${
-                  activeLink === link.name
+                className={`relative font-medium transition duration-200 ${activeLink === link.name
                     ? "text-white"
                     : "text-gray-300 hover:text-cyan-400"
-                }`}
+                  }`}
               >
                 {link.name}
                 {activeLink === link.name && (

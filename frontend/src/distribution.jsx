@@ -1,36 +1,51 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FiTwitter, FiInstagram, FiFacebook, FiLinkedin } from "react-icons/fi";
 import { SiTiktok } from "react-icons/si";
+import { BASE_URL } from "./config";
 
 export default function SocialIntegration() {
-  const [connections, setConnections] = useState({
-    Twitter: true,
-    Instagram: false,
-    LinkedIn: false,
-    Facebook: false,
-    TikTok: false,
-  });
-
+  const [platforms, setPlatforms] = useState([]);
+  const [connections, setConnections] = useState({});
   const [autoPost, setAutoPost] = useState(true);
 
-  const platforms = [
-    { name: "Twitter", icon: <FiTwitter /> },
-    { name: "Instagram", icon: <FiInstagram /> },
-    { name: "LinkedIn", icon: <FiLinkedin /> },
-    { name: "Facebook", icon: <FiFacebook /> },
-    { name: "TikTok", icon: <SiTiktok /> },
-  ];
+  // KEEP YOUR ORIGINAL ICONS
+  const iconMap = {
+    Twitter: <FiTwitter />,
+    Instagram: <FiInstagram />,
+    Facebook: <FiFacebook />,
+    LinkedIn: <FiLinkedin />,
+    TikTok: <SiTiktok />,
+  };
 
-  const toggleConnection = (platform) => {
+  // Fetch platforms
+  useEffect(() => {
+    fetch(`${BASE_URL}/api/sns`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setPlatforms(data.platforms);
+
+          // Initialize connection states dynamically
+          let initial = {};
+          data.platforms.forEach((p) => {
+            initial[p.name] = false;
+          });
+          setConnections(initial);
+        }
+      })
+      .catch((err) => console.log("SNS Fetch Error:", err));
+  }, []);
+
+  const toggleConnection = (platformName) => {
     setConnections((prev) => ({
       ...prev,
-      [platform]: !prev[platform],
+      [platformName]: !prev[platformName],
     }));
   };
 
   return (
     <div className="min-h-screen bg-[#0d0d10] text-white">
-      {/* ==== HEADER SECTION ==== */}
+      {/* HEADER */}
       <div className="border-y border-[#18181B] bg-gradient-to-r from-blue-500/25 via-zinc-900/35 to-purple-500/25 py-10 sm:py-14 md:py-20 text-center">
         <div className="flex justify-center">
           <img
@@ -55,7 +70,7 @@ export default function SocialIntegration() {
         </div>
       </div>
 
-      {/* ==== CONNECT ACCOUNTS SECTION ==== */}
+      {/* CONNECT ACCOUNTS */}
       <div className="w-full px-4 sm:px-6 md:px-12 py-8 sm:py-10">
         <div className="p-2 sm:p-4">
           <div className="border border-[#18181B] rounded-lg p-4 sm:p-6 mb-8 bg-[#131316] text-left">
@@ -67,36 +82,39 @@ export default function SocialIntegration() {
             </p>
           </div>
 
-          {/* ==== PLATFORM CARDS ==== */}
+          {/* PLATFORM GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {platforms.map((platform) => {
               const isConnected = connections[platform.name];
 
               return (
                 <div
-                  key={platform.name}
-                  className={`rounded-xl p-4 sm:p-5 flex flex-col transition-all border ${isConnected
+                  key={platform.id}
+                  className={`rounded-xl p-4 sm:p-5 flex flex-col transition-all border ${
+                    isConnected
                       ? "border-cyan-400 bg-cyan-400/10 "
                       : "border-[#18181B] bg-[#131316]"
-                    }`}
+                  }`}
                 >
-                  {/* === TOP BAR (Icon + Name + Status) === */}
+                  {/* TOP BAR */}
                   <div className="flex justify-between items-center mb-4 sm:mb-5">
                     <div className="flex items-center space-x-3">
                       <span
-                        className={`text-lg sm:text-xl ${isConnected
+                        className={`text-lg sm:text-xl ${
+                          isConnected
                             ? "text-cyan-400 border border-cyan-400 p-2 rounded-xl"
                             : "text-gray-400 border border-gray-600 p-2 rounded-xl"
-                          }`}
+                        }`}
                       >
-                        {platform.icon}
+                        {iconMap[platform.name] || <FiTwitter />} {/* fallback */}
                       </span>
+
                       <span className="font-semibold text-white text-base sm:text-lg">
                         {platform.name}
                       </span>
                     </div>
 
-                    {/* === STATUS TAG === */}
+                    {/* STATUS */}
                     {isConnected ? (
                       <span className="inline-flex items-center justify-center text-xs sm:text-sm text-green-400 border border-green-500 px-2 sm:px-3 py-1.5 rounded-2xl shadow-[0_0_8px_rgba(0,255,0,0.5)]">
                         ✓ Connected
@@ -108,7 +126,7 @@ export default function SocialIntegration() {
                     )}
                   </div>
 
-                  {/* === AUTO-POST TOGGLE (Visible only if connected) === */}
+                  {/* AUTO-POST */}
                   {isConnected && (
                     <div className="flex items-center justify-between border border-[#18181B] bg-[#0d0d0d] p-3 rounded-lg">
                       <p className="text-xs sm:text-sm text-gray-300">
@@ -127,14 +145,15 @@ export default function SocialIntegration() {
                     </div>
                   )}
 
-                  {/* === CONNECT / DISCONNECT BUTTON === */}
+                  {/* BUTTON */}
                   <div className="mt-auto">
                     <button
                       onClick={() => toggleConnection(platform.name)}
-                      className={`w-full mt-4 sm:mt-5 py-2 sm:py-2.5 rounded-lg font-medium text-sm sm:text-base ${isConnected
+                      className={`w-full mt-4 sm:mt-5 py-2 sm:py-2.5 rounded-lg font-medium text-sm sm:text-base ${
+                        isConnected
                           ? "bg-[#0d0d0d] border border-[#18181B] text-white"
                           : "bg-cyan-400 hover:bg-cyan-500 text-black"
-                        }`}
+                      }`}
                     >
                       {isConnected ? "Disconnect" : "Connect"}
                     </button>

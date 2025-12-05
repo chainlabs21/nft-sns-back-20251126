@@ -1,3 +1,12 @@
+// IMPORTS
+require("dotenv").config();
+const pinataSDK = require("@pinata/sdk");
+const pinata = new pinataSDK(process.env.PINATA_API_KEY, process.env.PINATA_API_SECRET);
+
+
+// Import cron starter
+const startSnsCron = require("./snsCron"); // adjust path if needed
+
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -7,57 +16,36 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-require("dotenv").config();
-
+// MODELS
 const sequelize = require("./sequelize");
 const User = require("./User");
-const UserWallet = require("./UserWalle")
-
+const UserWallet = require("./UserWalle");
+const Item = require("./Item");
+const Event = require("./Event");
+const Settings = require("./Setting");
+const ItemSns = require("./ItemSns");
+const { v4: uuidv4 } = require("uuid");
+const Sns = require("./Sns");
 const { sendVerificationEmail } = require("./emailService");
+const SnsForm = require("./sns_form");
 
-// -------------------------
-// MULTER CONFIG
-// -------------------------
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, "uploads", "profiles");
-    fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `profile_${req.user.id}_${Date.now()}${ext}`);
-  },
-});
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
-  fileFilter: (req, file, cb) => {
-    const allowed = [".jpg", ".jpeg", ".png", ".webp"];
-    if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
-      return cb(new Error("Only images are allowed"));
-    }
-    cb(null, true);
-  },
-});
 
+// EXPRESS APP
 const app = express();
 app.use(cors());
 app.use(express.json());
-
+app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// -------------------------
-// JWT
-// -------------------------
+// JWT TOKEN
 function generateToken(user) {
   return jwt.sign(
     {
       id: user.id,
-      email: user.email || null,
+      email: user.email,
       role: user.role || "User",
     },
     JWT_SECRET,
@@ -65,7 +53,9 @@ function generateToken(user) {
   );
 }
 
-// authMiddleware (add this)
+// ==========================
+// AUTH MIDDLEWARE
+// ==========================
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader)
@@ -76,88 +66,114 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
-    console.log('[authMiddleware] decoded token:', decoded); // <--- add
     next();
   } catch (err) {
-    console.error('[authMiddleware] token verify error:', err);
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 }
 
-// -------------------------
-// HELPERS
-// -------------------------
+// ==========================
+// MULTER — PROFILE UPLOAD
+// ==========================
+const profileStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, "uploads/profiles");
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${req.user.id}_${Date.now()}${ext}`);
+  },
+});
+
+const uploadProfile = multer({
+  storage: profileStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [".jpg", ".jpeg", ".png", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!allowed.includes(ext))
+      return cb(new Error("Only images allowed"));
+    cb(null, true);
+  },
+});
+
+// ==========================
+// MULTER — ITEM UPLOAD
+// ==========================
+const uploadItem = multer({
+  dest: path.join(__dirname, "uploads/tmp_items"),
+  limits: { fileSize: 500 * 1024 * 1024 }, // 50MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = [".png", ".jpg", ".jpeg", ".mp4", ".mov"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!allowed.includes(ext))
+      return cb(new Error("Only PNG/JPG/MP4/MOV allowed"));
+    cb(null, true);
+  },
+});
+
+// ==========================
+// HELPER — GENERATE OTP
+// ==========================
 function generate6DigitCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// -------------------------
-// USER SIGNUP (WITH EMAIL OTP)
-// -------------------------
+// ==========================
+// REGISTER
+// ==========================
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { full_name, email, password, role } = req.body;
 
     if (!full_name || !email || !password || !role)
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "All fields required" });
 
-    const existing = await User.findOne({ where: { email } });
-    if (existing)
-      return res.status(409).json({ message: "Email already exists" });
+    const exists = await User.findOne({ where: { email } });
+    if (exists) return res.status(409).json({ message: "Email exists" });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    const hashed = await bcrypt.hash(password, 10);
     const code = generate6DigitCode();
-    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    const expires = new Date(Date.now() + 10 * 60 * 1000);
 
-    const newUser = await User.create({
+    const user = await User.create({
       full_name,
       email,
-      password: hashedPassword,
+      password: hashed,
       role,
       isVerified: false,
       verificationCode: code,
       verificationExpires: expires,
     });
 
-    try {
-      await sendVerificationEmail(email, code);
-    } catch (err) {
-      console.error("Email send error:", err);
-      return res.status(500).json({
-        message: "Failed to send verification email. Try resend later.",
-      });
-    }
+    await sendVerificationEmail(email, code);
 
-    return res.status(201).json({
-      message: "Account created. Verification code sent.",
-      user_id: newUser.id,
+    res.status(201).json({
+      message: "Account created. OTP sent.",
+      user_id: user.id,
     });
-
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// -------------------------
-// VERIFY EMAIL OTP
-// -------------------------
+// ==========================
+// VERIFY EMAIL
+// ==========================
 app.post("/api/auth/verify-email", async (req, res) => {
   try {
     const { user_id, code } = req.body;
 
-    if (!user_id || !code)
-      return res.status(400).json({ message: "Missing fields" });
-
     const user = await User.findByPk(user_id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (user.isVerified)
-      return res.status(400).json({ message: "Email already verified" });
+    if (user.isVerified) return res.json({ message: "Already verified" });
 
     if (user.verificationCode !== code)
-      return res.status(400).json({ message: "Incorrect code" });
+      return res.status(400).json({ message: "Invalid code" });
 
     if (new Date() > user.verificationExpires)
       return res.status(400).json({ message: "Code expired" });
@@ -167,27 +183,21 @@ app.post("/api/auth/verify-email", async (req, res) => {
     user.verificationExpires = null;
     await user.save();
 
-    res.json({ message: "Email verified successfully" });
-
-  } catch (err) {
-    console.error("Verify error:", err);
+    res.json({ message: "Email verified" });
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
+// ==========================
+// RESEND OTP
+// ==========================
 app.post("/api/auth/resend-otp", async (req, res) => {
   try {
     const { user_id } = req.body;
 
-    if (!user_id)
-      return res.status(400).json({ message: "User ID is required" });
-
     const user = await User.findByPk(user_id);
-    if (!user)
-      return res.status(404).json({ message: "User not found" });
-
-    if (user.isVerified)
-      return res.status(400).json({ message: "Email already verified" });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     const code = generate6DigitCode();
     const expires = new Date(Date.now() + 10 * 60 * 1000);
@@ -198,18 +208,15 @@ app.post("/api/auth/resend-otp", async (req, res) => {
 
     await sendVerificationEmail(user.email, code);
 
-    res.json({ message: "Verification code resent" });
-
-  } catch (err) {
-    console.error("Resend OTP error:", err);
+    res.json({ message: "OTP resent" });
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-
-// -------------------------
+// ==========================
 // LOGIN
-// -------------------------
+// ==========================
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -218,68 +225,61 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user)
       return res.status(401).json({ message: "Invalid credentials" });
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword)
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid)
       return res.status(401).json({ message: "Invalid credentials" });
 
-    // BLOCK LOGIN IF EMAIL NOT VERIFIED
-    if (!user.isVerified) {
+    if (!user.isVerified)
       return res.status(403).json({
         message: "Email not verified",
         verification_required: true,
         user_id: user.id,
       });
-    }
 
     const token = generateToken(user);
 
     const activeWallet = await UserWallet.findOne({
       where: { user_id: user.id, is_active: true },
-      attributes: ["id", "address", "is_active"],
+      attributes: ["id", "address", "balance"],
     });
 
     res.json({
       message: "Login successful",
-      user_id: user.id,
       token,
-      active_wallet: activeWallet || null,
+      user_id: user.id,
       wallet_connected: !!activeWallet,
+      active_wallet: activeWallet,
     });
-
-  } catch (err) {
-    console.error("Login error:", err);
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-
-
-// Wallet Connect
-
+// ==========================
+// ADD WALLET
+// ==========================
 app.post("/api/wallet/add", authMiddleware, async (req, res) => {
   try {
     const { address, balance } = req.body;
-    if (!address) return res.status(400).json({ message: "Wallet address required" });
 
-    // Check if wallet exists for ANY user
-    const walletTaken = await UserWallet.findOne({ where: { address } });
-    if (walletTaken && walletTaken.user_id !== req.user.id) {
-      return res.status(400).json({ message: "This wallet is linked to another user" });
-    }
+    if (!address)
+      return res.status(400).json({ message: "Wallet address required" });
 
-    // Check if same user has this wallet already
-    let userWallet = await UserWallet.findOne({
+    // If wallet already linked to someone else
+    const exists = await UserWallet.findOne({ where: { address } });
+    if (exists && exists.user_id !== req.user.id)
+      return res.status(400).json({ message: "Wallet linked to another user" });
+
+    let wallet = await UserWallet.findOne({
       where: { user_id: req.user.id, address },
     });
 
-    if (userWallet) {
-      // Reactivate it and update info
-      userWallet.is_active = true;
-      userWallet.balance = balance;
-      await userWallet.save();
+    if (wallet) {
+      wallet.is_active = true;
+      wallet.balance = balance;
+      await wallet.save();
     } else {
-      // Create a new wallet record
-      userWallet = await UserWallet.create({
+      wallet = await UserWallet.create({
         user_id: req.user.id,
         address,
         balance,
@@ -287,47 +287,37 @@ app.post("/api/wallet/add", authMiddleware, async (req, res) => {
       });
     }
 
-    // Set all other wallets of this user to inactive
     await UserWallet.update(
       { is_active: false },
-      { where: { user_id: req.user.id, id: { [Op.ne]: userWallet.id } } }
+      { where: { user_id: req.user.id, id: { [Op.ne]: wallet.id } } }
     );
 
-    res.json({ message: "Wallet linked successfully", wallet: userWallet });
-  } catch (err) {
-    console.error(err);
+    res.json({ message: "Wallet linked", wallet });
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-// -------------------------
-// DISCONNECT ACTIVE WALLET
-// -------------------------
+// ==========================
+// DISCONNECT WALLET
+// ==========================
 app.patch("/api/wallet/disconnect", authMiddleware, async (req, res) => {
   try {
     await UserWallet.update(
       { is_active: false },
       { where: { user_id: req.user.id, is_active: true } }
     );
-
-    res.json({ message: "Wallet disconnected successfully" });
-  } catch (err) {
-    console.error("Disconnect wallet error:", err);
+    res.json({ message: "Wallet disconnected" });
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-
-// -------------------------
+// ==========================
 // GET USER PROFILE
-// -------------------------
-// -------------------------
-// GET USER PROFILE (WITH WALLET BALANCE)
-// -------------------------
+// ==========================
 app.get("/api/user/profile", authMiddleware, async (req, res) => {
   try {
-    console.log('[GET /api/user/profile] req.user:', req.user);
-
     const user = await User.findByPk(req.user.id, {
       attributes: [
         "id",
@@ -341,41 +331,34 @@ app.get("/api/user/profile", authMiddleware, async (req, res) => {
       include: [
         {
           model: UserWallet,
-          attributes: ["id", "address", "is_active", "balance"], // <- added balance
+          attributes: ["id", "address", "balance", "is_active"],
         },
       ],
     });
 
-    console.log('[GET /api/user/profile] found user:', !!user);
+    if (!user) return res.status(404).json({ message: "Not found" });
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const data = user.toJSON();
 
-    let profile = user.toJSON();
-
-    // Prefix profileImage with server URL if it exists
-    if (profile.profileImage) {
-      profile.profileImage = `${req.protocol}://${req.get("host")}${profile.profileImage}`;
+    if (data.profileImage) {
+      data.profileImage = `${req.protocol}://${req.get("host")}${data.profileImage}`;
     }
 
-    // Optional: only return the active wallet info
-    const activeWallet = profile.UserWallets?.find(w => w.is_active) || null;
-    profile.activeWallet = activeWallet;
+    data.activeWallet = data.UserWallets?.find(w => w.is_active) || null;
 
-    res.json({ profile });
-  } catch (err) {
-    console.error("Profile fetch error:", err);
+    res.json({ profile: data });
+  } catch {
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
-
-// -------------------------
-// UPDATE USER PROFILE (WITH IMAGE)
-// -------------------------
+// ==========================
+// UPDATE PROFILE + IMAGE
+// ==========================
 app.put(
   "/api/user/profile",
   authMiddleware,
-  upload.single("profileImage"), // must match frontend field name
+  uploadProfile.single("profileImage"),
   async (req, res) => {
     try {
       const { full_name, bio, twitter, instagram, website } = req.body;
@@ -383,55 +366,281 @@ app.put(
       const user = await User.findByPk(req.user.id);
       if (!user) return res.status(404).json({ message: "User not found" });
 
-      // Update profile fields
       user.full_name = full_name || user.full_name;
       user.bio = bio || user.bio;
       user.twitter = twitter || user.twitter;
       user.instagram = instagram || user.instagram;
       user.website = website || user.website;
 
-      // If file uploaded, save path
       if (req.file) {
-        const fileUrl = `/uploads/profiles/${req.file.filename}`;
-        user.profileImage = fileUrl;
+        user.profileImage = `/uploads/profiles/${req.file.filename}`;
       }
 
       await user.save();
 
-      // Return full URL to frontend
-      let profileImageUrl = user.profileImage
-        ? `${req.protocol}://${req.get("host")}${user.profileImage}`
-        : null;
-
       res.json({
-        message: "Profile updated successfully",
-        profileImage: profileImageUrl,
+        message: "Profile updated",
+        profileImage: user.profileImage
+          ? `${req.protocol}://${req.get("host")}${user.profileImage}`
+          : null,
       });
-
-    } catch (err) {
-      console.error("Profile update error:", err);
+    } catch {
       res.status(500).json({ message: "Internal server error" });
     }
   }
 );
 
-// -------------------------
-// SERVE UPLOADED FILES
-// -------------------------
-app.use(
-  "/uploads/profiles",
-  express.static(path.join(__dirname, "uploads", "profiles"))
-);
-// -------------------------
-// START SERVER & SYNC DB
-// -------------------------
+// ==========================
+// GET EVENTS
+// ==========================
+app.get("/api/events", async (req, res) => {
+  try {
+    const events = await Event.findAll({
+      order: [["createdat", "DESC"]],
+    });
+    res.json({ events });
+  } catch {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// ==========================
+// GET ACTIVE SNS PLATFORMS
+// ==========================
+app.get("/api/sns", async (req, res) => {
+  try {
+    const platforms = await Sns.findAll({
+      where: { status: 1 },
+      order: [["id", "ASC"]],
+    });
+
+    res.json({
+      success: true,
+      total: platforms.length,
+      platforms,
+    });
+
+  } catch (err) {
+    console.error("SNS Fetch Error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+/// ==========================
+// DYNAMIC IPFS ITEM UPLOAD
+// ==========================
+app.post("/api/upload-item-file", authMiddleware, uploadItem.single("file"), async (req, res) => {
+  try {
+    // 1️⃣ Must have a file
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    // 2️⃣ Load max file size from DB
+    const setting = await Settings.findOne({
+      where: { setting_key: "MAX_FILE_SIZE_MB" },
+    });
+
+    let maxSizeMB = 10; // fallback
+    if (setting?.setting_value) {
+      const parsed = parseInt(setting.setting_value);
+      if (!isNaN(parsed) && parsed > 0) maxSizeMB = parsed;
+    }
+
+    const maxBytes = maxSizeMB * 1024 * 1024;
+
+    // 3️⃣ Check actual size
+    if (req.file.size > maxBytes) {
+      fs.unlinkSync(req.file.path); // delete temp file
+      return res.status(400).json({ error: `File too large. Limit: ${maxSizeMB}MB` });
+    }
+
+    // 4️⃣ Send file to Pinata
+    const fileStream = fs.createReadStream(req.file.path);
+    const options = {
+      pinataMetadata: {
+        name: req.file.originalname,
+        keyvalues: { uploadedBy: req.user.id.toString() },
+      },
+      pinataOptions: { cidVersion: 1 },
+    };
+
+    const result = await pinata.pinFileToIPFS(fileStream, options);
+    const fileUrl = `https://gateway.pinata.cloud/ipfs/${result.IpfsHash}`;
+
+    // 5️⃣ Save in DB
+    const item = await Item.create({
+      user_id: req.user.id,                    // ✅ use authenticated user
+      name: req.body.title || req.file.originalname,
+      description: req.body.description || null,
+      url_storage: fileUrl,
+      url_thumbnail: null,
+      status: 0,
+      event_id: req.body.event_id || null,     // still dynamic from frontend
+    });
+
+    // 6️⃣ Cleanup local temp file
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+      item_id: item.id,
+      fileUrl,
+    });
+
+  } catch (err) {
+    console.error("IPFS Upload Error:", err);
+    if (req.file?.path) fs.unlinkSync(req.file.path); // cleanup
+    res.status(500).json({ error: "IPFS upload failed" });
+  }
+});
+
+
+// ==========================
+// ADD SNS TO ITEM
+// ==========================
+app.post("/api/item/sns/add", authMiddleware, async (req, res) => {
+  try {
+    const { item_id, sns, handle, url } = req.body;
+
+    // -------------------------------------
+    // VALIDATION
+    // -------------------------------------
+    if (!item_id)
+      return res.status(400).json({ message: "item_id is required" });
+
+    if (!sns || !Array.isArray(sns) || sns.length === 0)
+      return res.status(400).json({ message: "sns must be a non-empty array" });
+
+    // Check item exists and belongs to user (optional but recommended)
+    const item = await Item.findOne({
+      where: { id: item_id },
+      // where: { id: item_id, user_id: req.user.id },
+    });
+
+    if (!item)
+      return res.status(404).json({ message: "Item not found or unauthorized" });
+
+    // -------------------------------------
+    // INSERT SNS ROWS
+    // -------------------------------------
+    const createdRows = [];
+
+    for (const snsKind of sns) {
+      const row = await ItemSns.create({
+        item_id,
+        sns_kind: snsKind,
+        handle: handle || "default_handle",
+        url: url || null,
+        uuid: uuidv4(),
+        status: 0,          // Workflow starts at 'waiting'
+        status_str: "waiting"
+      });
+
+      createdRows.push(row);
+    }
+
+    // -------------------------------------
+    // RESPONSE
+    // -------------------------------------
+    return res.status(201).json({
+      message: "SNS added successfully",
+      inserted: createdRows,
+    });
+  } catch (err) {
+    console.error("SNS ADD ERROR:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+// ==========================
+// STATIC FILE SERVING
+// ==========================
+app.use("/uploads/profiles", express.static(path.join(__dirname, "uploads/profiles")));
+app.use("/uploads/items", express.static(path.join(__dirname, "uploads/items")));
+
+
+// GET all SNS form fields, optionally filter by sns_kind
+app.get("/api/sns-form", async (req, res) => {
+  try {
+    const { sns_kind } = req.query;
+
+    const where = sns_kind ? { sns_kind } : {};
+
+    const forms = await SnsForm.findAll({ where });
+
+    res.json({
+      success: true,
+      total: forms.length,
+      forms,
+    });
+  } catch (err) {
+    console.error("SNS Form Fetch Error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+
+// ==========================
+// UPDATE ITEM METADATA
+// ==========================
+app.post("/api/update-item-metadata", authMiddleware, async (req, res) => {
+  try {
+    const { item_id, title, description, category, tags, royalty, event_id } = req.body;
+
+    // 1️⃣ Validate required fields
+    if (!item_id) return res.status(400).json({ error: "item_id is required" });
+
+    // 2️⃣ Check if item exists and belongs to user
+    const item = await Item.findOne({ where: { id: item_id } });
+    if (!item) return res.status(404).json({ error: "Item not found" });
+
+    if (item.user_id !== req.user.id) {
+      return res.status(403).json({ error: "Unauthorized to update this item" });
+    }
+
+    // 3️⃣ Update item metadata
+    await Item.update(
+      {
+        name: title || item.name,
+        description: description || item.description,
+        category: category || null,
+        tags: tags || null,
+        royalty: royalty || null,
+        event_id: event_id || item.event_id,
+      },
+      { where: { id: item_id } }
+    );
+
+    res.json({
+      success: true,
+      message: "NFT metadata updated successfully",
+      item_id,
+    });
+
+  } catch (err) {
+    console.error("Metadata Update Error:", err);
+    res.status(500).json({ error: "Failed to update metadata" });
+  }
+});
+
+// ==========================
+// START SERVER
+// ==========================
 sequelize
   .sync()
   .then(() => {
     console.log("Database synced");
-    app.listen(PORT, () =>
-      console.log(`Server running on port ${PORT}`)
-    );
+
+    // Start Express server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+
+      // Start cron jobs
+      startSnsCron();
+      console.log("SNS cron jobs started...");
+    });
   })
   .catch((err) => {
     console.error("DB Sync Error:", err);

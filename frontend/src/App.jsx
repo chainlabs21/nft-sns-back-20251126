@@ -6,6 +6,10 @@ import Wallets from "./wallets.jsx";
 import Login from "./login.jsx";
 import RegisterPage from "./register.jsx";
 import VerifyEmailPage from "./VerifyEmailPage.jsx";
+import Events from "./events.jsx";
+import UploadMintNFT from "./UploadNFT.jsx";
+import DistributionPage from "./distributioncomplete.jsx";
+import MyNFTsPage from "./mynft.jsx";
 
 function App() {
   return (
@@ -17,6 +21,10 @@ function App() {
         <Route path="/wallets" element={<Wallets />} />
         <Route path="/profile" element={<ProfileSettings />} />
         <Route path="/verify-email" element={<VerifyEmailPage/>}/>
+        <Route path="/events" element={<Events/>}/>
+        <Route path="/upload" element={<UploadMintNFT/>}/>
+        <Route path="/distribution" element={<DistributionPage/>}/>
+        <Route path="/mynft" element={<MyNFTsPage/>}/>
 
         {/* Optional: fallback for unknown routes */}
         <Route
